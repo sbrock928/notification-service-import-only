@@ -25,9 +25,7 @@ _ENDPOINT = os.environ.get("NOTIFICATION_TEST_PA_SIGNED_URL")
 )
 async def test_power_automate_teams_webhook_acceptance() -> None:
     assert _ENDPOINT is not None
-    provider = PowerAutomateTeamsProvider(
-        {"contract-test": PowerAutomateWebhook(_ENDPOINT)},
-    )
+    provider = PowerAutomateTeamsProvider(PowerAutomateWebhook(_ENDPOINT))
     try:
         outcome = await provider.send(
             TeamsNotification(

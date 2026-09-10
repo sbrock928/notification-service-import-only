@@ -22,8 +22,8 @@ configured channel.
    custom header, and do not paste it into source control.
 7. Add a co-owner who can maintain the workflow if the original owner leaves.
    Confirm the workflow is turned on and that the Teams connection is healthy.
-8. Repeat these steps for every logical destination (for example, `ops-alerts`
-   and `data-quality`). Each destination maps to its own channel workflow URL.
+8. If the application sends to another channel, repeat these steps and construct
+   a separate provider/client for that channel. Each channel has its own URL.
 
 The template's trigger is the Teams webhook trigger and its default actions
 process the standard `type: message` Adaptive Card envelope emitted by this
@@ -38,17 +38,13 @@ secret store:
 
 ```powershell
 $env:PA_TEAMS_OPS_ALERTS_SIGNED_URL = "<complete copied workflow URL>"
-$env:PA_TEAMS_DATA_QUALITY_SIGNED_URL = "<complete copied workflow URL>"
 ```
 
-Pass the values to the provider as complete strings:
+Construct one provider/client per channel and pass its complete URL as one string:
 
 ```python
 provider = PowerAutomateTeamsProvider(
-    {
-        "ops-alerts": PowerAutomateWebhook(os.environ["PA_TEAMS_OPS_ALERTS_SIGNED_URL"]),
-        "data-quality": PowerAutomateWebhook(os.environ["PA_TEAMS_DATA_QUALITY_SIGNED_URL"]),
-    },
+    PowerAutomateWebhook(os.environ["PA_TEAMS_OPS_ALERTS_SIGNED_URL"]),
 )
 ```
 

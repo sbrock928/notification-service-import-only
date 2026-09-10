@@ -49,7 +49,7 @@ def notification(destination: str = "ops-alerts") -> TeamsNotification:
 
 def provider(client: httpx.AsyncClient, **changes: object) -> PowerAutomateTeamsProvider:
     values: dict[str, object] = {
-        "destinations": {"ops-alerts": PowerAutomateWebhook(ENDPOINT)},
+        "webhook": PowerAutomateWebhook(ENDPOINT),
         "client": client,
     }
     values.update(changes)
@@ -118,28 +118,12 @@ def test_webhook_requires_signed_https_url(endpoint: str) -> None:
 async def test_provider_uses_one_signed_url_without_host_suffix_configuration() -> None:
     client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(202)))
     adapter = PowerAutomateTeamsProvider(
-        {"ops": "https://long-random-host.invalid/trigger?sig=very-long-jumbled-value"},
+        "https://long-random-host.invalid/trigger?sig=very-long-jumbled-value",
         client=client,
     )
     result = await adapter.send(notification("ops"), metadata())
     await client.aclose()
     assert isinstance(result, ProviderAccepted)
-
-
-async def test_unknown_destination_does_not_call_http() -> None:
-    calls = 0
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        return httpx.Response(202)
-
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    result = await provider(client).send(notification("missing"), metadata())
-    await client.aclose()
-    assert isinstance(result, ProviderFailure)
-    assert result.error_code is DeliveryErrorCode.DESTINATION_NOT_CONFIGURED
-    assert calls == 0
 
 
 @pytest.mark.parametrize("status", [408, 429, 500, 502])
@@ -219,7 +203,7 @@ async def test_payload_limit_can_reject_unrepresentable_base_message() -> None:
 
 
 async def test_provider_owned_http_client_closes() -> None:
-    adapter = PowerAutomateTeamsProvider({"ops": ENDPOINT})
+    adapter = PowerAutomateTeamsProvider(ENDPOINT)
     assert adapter._client.is_closed is False
     await adapter.aclose()
     assert adapter._client.is_closed is True

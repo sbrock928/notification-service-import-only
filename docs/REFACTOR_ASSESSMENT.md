@@ -110,7 +110,7 @@ metadata should be `>=3.13,<3.14` as requested.
 - `client.py` contains the synchronous facade, which owns a private event-loop thread.
 - `providers/win32com/outlook.py` performs blocking Outlook COM composition and send work via
   `asyncio.to_thread()`.
-- `providers/power_automate/teams.py` maps logical destinations to trusted webhook configuration and
+- `providers/power_automate/teams.py` accepts one complete Teams workflow webhook URL per provider and
   owns or borrows an `httpx.AsyncClient`.
 - `providers/microsoft_graph/` contains future email and Teams adapters, a common HTTP base, and an
   access-token protocol.

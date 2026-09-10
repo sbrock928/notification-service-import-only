@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
@@ -143,19 +142,15 @@ class PowerAutomateTeamsProvider:
 
     def __init__(
         self,
-        destinations: Mapping[str, PowerAutomateWebhook | str],
+        webhook: PowerAutomateWebhook | str,
         *,
         client: httpx.AsyncClient | None = None,
         render_policy: TableRenderPolicy | None = None,
         throttling_proves_not_accepted: bool = False,
     ) -> None:
-        if not destinations:
-            raise ValueError("At least one Teams destination must be configured")
-        configured = {
-            name: value if isinstance(value, PowerAutomateWebhook) else PowerAutomateWebhook(value)
-            for name, value in destinations.items()
-        }
-        self._destinations = configured
+        self._webhook = (
+            webhook if isinstance(webhook, PowerAutomateWebhook) else PowerAutomateWebhook(webhook)
+        )
         self._render_policy = render_policy or TableRenderPolicy()
         self._throttling_proves_not_accepted = throttling_proves_not_accepted
         self._owns_client = client is None
@@ -170,13 +165,6 @@ class PowerAutomateTeamsProvider:
         notification: TeamsNotification,
         metadata: DeliveryMetadata,
     ) -> ProviderOutcome:
-        webhook = self._destinations.get(notification.destination)
-        if webhook is None:
-            return ProviderFailure(
-                certainty=AcceptanceCertainty.NOT_ACCEPTED,
-                error_code=DeliveryErrorCode.DESTINATION_NOT_CONFIGURED,
-                diagnostic_code="power_automate_destination_missing",
-            )
         try:
             payload = self._payload(notification, metadata)
         except ValidationError:
@@ -187,7 +175,7 @@ class PowerAutomateTeamsProvider:
             )
         try:
             response = await self._client.post(
-                webhook.endpoint,
+                self._webhook.endpoint,
                 json=payload,
                 follow_redirects=False,
             )

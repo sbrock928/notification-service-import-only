@@ -150,7 +150,7 @@ from notification_service import (
 )
 
 provider = PowerAutomateTeamsProvider(
-    {"ops-alerts": PowerAutomateWebhook(os.environ["PA_TEAMS_OPS_ALERTS_SIGNED_URL"])},
+    PowerAutomateWebhook(os.environ["PA_TEAMS_OPS_ALERTS_SIGNED_URL"]),
 )
 
 async with NotificationClient(

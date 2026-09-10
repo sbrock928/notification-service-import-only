@@ -21,7 +21,7 @@ provider per profile and process.
 
 ```python
 teams_provider = PowerAutomateTeamsProvider(
-    {"ops-alerts": PowerAutomateWebhook(signed_trigger_url)},
+    PowerAutomateWebhook(signed_webhook_url),
 )
 ```
 
