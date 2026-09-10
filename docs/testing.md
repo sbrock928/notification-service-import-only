@@ -3,6 +3,9 @@
 Automated tests use HTTP mock transports and fake COM objects. They need no Outlook
 installation, webhook, Azure tenant, or Microsoft credential.
 
+Start with [development.md](development.md) for cloning, virtual-environment
+creation, `pip-sync`, and editable installation.
+
 ```bash
 python -m pip install -c constraints/py313.txt -e ".[dev,graph]"
 ruff check .

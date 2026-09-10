@@ -20,8 +20,11 @@ stages:
               versionSpec: "3.13"
           - script: python -m pip install --upgrade pip
             displayName: Upgrade pip
-          - script: python -m pip install -c constraints/py313.txt -e ".[dev,graph]"
-            displayName: Install reviewed dependencies
+          - script: |
+              python -m pip install --upgrade pip pip-tools==7.6.1
+              pip-sync constraints/py313.txt
+              python -m pip install --no-deps -e ".[dev,graph]"
+            displayName: Install reviewed dependencies with pip-sync
           - script: ruff check . && ruff format --check .
             displayName: Lint and format
           - script: mypy src
@@ -45,7 +48,10 @@ stages:
               versionSpec: "3.13"
           - script: python -m pip install --upgrade pip
             displayName: Upgrade pip
-          - script: python -m pip install -c constraints/py313.txt -e ".[dev,outlook-win32]"
-            displayName: Install Outlook test dependencies
+          - script: |
+              python -m pip install --upgrade pip pip-tools==7.6.1
+              pip-sync constraints/py313.txt
+              python -m pip install --no-deps -e ".[dev,outlook-win32]"
+            displayName: Install Outlook test dependencies with pip-sync
           - script: pytest -m "not live" tests
             displayName: Run offline fake-COM tests
