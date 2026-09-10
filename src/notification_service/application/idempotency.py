@@ -62,6 +62,16 @@ class AtomicIdempotencyStore(Protocol):
 
     async def release(self, claim: IdempotencyClaim) -> None: ...
 
+    async def resolve(
+        self,
+        *,
+        source_application: str,
+        channel: str,
+        key: str,
+        expected_fingerprint: str,
+        result: DeliveryResult,
+    ) -> None: ...
+
 
 @dataclass(slots=True)
 class _Record:
