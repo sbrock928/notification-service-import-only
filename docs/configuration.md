@@ -34,6 +34,11 @@ is no separate host-suffix setting: keep the complete URL in the deployment secr
 store and never log it because its query string is a secret. Environment proxies
 remain enabled for the provider-owned HTTP client.
 
+For a Zscaler deployment that requires an explicit proxy, pass `proxy=` or set
+`HTTPS_PROXY`; the client does not evaluate PAC files. If TLS inspection is enabled,
+configure the approved Zscaler CA bundle through `SSL_CERT_FILE` and never disable
+certificate verification.
+
 ## Client policy
 
 ```python

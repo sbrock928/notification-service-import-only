@@ -207,3 +207,9 @@ async def test_provider_owned_http_client_closes() -> None:
     assert adapter._client.is_closed is False
     await adapter.aclose()
     assert adapter._client.is_closed is True
+
+
+async def test_provider_accepts_explicit_corporate_proxy() -> None:
+    adapter = PowerAutomateTeamsProvider(ENDPOINT, proxy="http://proxy.example:8080")
+    assert adapter._client.is_closed is False
+    await adapter.aclose()

@@ -146,6 +146,7 @@ class PowerAutomateTeamsProvider:
         *,
         client: httpx.AsyncClient | None = None,
         render_policy: TableRenderPolicy | None = None,
+        proxy: str | None = None,
         throttling_proves_not_accepted: bool = False,
     ) -> None:
         self._webhook = (
@@ -157,6 +158,7 @@ class PowerAutomateTeamsProvider:
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(connect=5, pool=5, read=30, write=30),
             follow_redirects=False,
+            proxy=proxy,
             trust_env=True,
         )
 

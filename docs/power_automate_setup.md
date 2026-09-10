@@ -52,6 +52,53 @@ The provider uses the normal Windows proxy settings, does not add bearer or
 custom authorization headers, and disables redirects. Keep URL query strings out
 of logs and diagnostic output.
 
+## Zscaler and corporate proxies
+
+`httpx` honors `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, and `NO_PROXY` when the
+provider owns its client (`trust_env=True`). It does not evaluate a Windows PAC
+file or automatically import every proxy setting from Internet Options. If
+Zscaler requires an explicit proxy, set the approved proxy address in the worker
+process or pass it when constructing the provider:
+
+```powershell
+$env:HTTPS_PROXY = "http://proxy.contoso.com:8080"
+$env:HTTP_PROXY = $env:HTTPS_PROXY
+# Set NO_PROXY only for hosts that corporate policy explicitly allows direct.
+$env:NO_PROXY = ""
+```
+
+```python
+provider = PowerAutomateTeamsProvider(
+    PowerAutomateWebhook(os.environ["PA_TEAMS_OPS_ALERTS_SIGNED_URL"]),
+    proxy=os.environ.get("HTTPS_PROXY"),
+)
+```
+
+Do not put proxy usernames, passwords, or signed webhook URLs in source control
+or logs. If Zscaler performs TLS inspection, Python must trust the Zscaler root
+CA. Prefer the reviewed corporate CA bundle through `SSL_CERT_FILE` rather than
+disabling certificate verification:
+
+```powershell
+$env:SSL_CERT_FILE = "C:\ProgramData\Contoso\certs\zscaler-root-bundle.pem"
+```
+
+Do not set `verify=False` in production. Ask the network team for the approved
+proxy hostname/port and CA-bundle path; a PAC URL alone is not sufficient for
+this client.
+
+For a safe connectivity check that does not print the signed query string:
+
+```powershell
+$uri = [Uri]$env:NOTIFICATION_TEST_PA_SIGNED_URL
+Test-NetConnection -ComputerName $uri.DnsSafeHost -Port 443
+```
+
+Then run the smoke test. A connect or pool timeout usually indicates routing or
+proxy configuration. A read/write timeout is ambiguous: the webhook may already
+have been accepted, so investigate the workflow run history before retrying with
+a new idempotency key.
+
 ## Run the smoke test
 
 Use a controlled channel and a newly generated idempotency key:
