@@ -14,11 +14,9 @@ Requirements:
 
 Recommended environment variables:
     NOTIFICATION_TEST_PA_SIGNED_URL
-    NOTIFICATION_TEST_PA_HOST_SUFFIX
 
 Example (PowerShell):
     $env:NOTIFICATION_TEST_PA_SIGNED_URL = "<signed Power Automate URL>"
-    $env:NOTIFICATION_TEST_PA_HOST_SUFFIX = "logic.azure.com"
 
     python teams_channel_smoke_test.py --destination ops-alerts
 
@@ -56,14 +54,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--host-suffix",
-        default=os.getenv("NOTIFICATION_TEST_PA_HOST_SUFFIX"),
-        help=(
-            "Approved host suffix for the signed URL, such as logic.azure.com. "
-            "Prefer NOTIFICATION_TEST_PA_HOST_SUFFIX."
-        ),
-    )
-    parser.add_argument(
         "--destination",
         default="teams-smoke-test",
         help="Logical destination name included in the schema-v2 payload.",
@@ -81,7 +71,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def validate_signed_url(url: str, allowed_host_suffix: str) -> None:
+def validate_signed_url(url: str) -> None:
     parsed = urlparse(url)
 
     if parsed.scheme != "https":
@@ -90,14 +80,6 @@ def validate_signed_url(url: str, allowed_host_suffix: str) -> None:
         raise ValueError("Power Automate URL must contain a hostname.")
     if not parsed.query:
         raise ValueError("Expected a signed Power Automate URL with a query string.")
-
-    hostname = parsed.hostname.casefold().rstrip(".")
-    suffix = allowed_host_suffix.casefold().lstrip(".").rstrip(".")
-
-    if hostname != suffix and not hostname.endswith("." + suffix):
-        raise ValueError(
-            f"URL host {hostname!r} does not match approved suffix {suffix!r}."
-        )
 
 
 def main() -> int:
@@ -110,15 +92,8 @@ def main() -> int:
         )
         return 2
 
-    if not args.host_suffix:
-        print(
-            "ERROR: Provide --host-suffix or set NOTIFICATION_TEST_PA_HOST_SUFFIX.",
-            file=sys.stderr,
-        )
-        return 2
-
     try:
-        validate_signed_url(args.url, args.host_suffix)
+        validate_signed_url(args.url)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

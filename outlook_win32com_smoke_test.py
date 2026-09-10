@@ -55,8 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--body",
         default=(
-            "This is a real test email sent from Python through "
-            "Classic Outlook using win32com."
+            "This is a real test email sent from Python through Classic Outlook using win32com."
         ),
         help="Plain-text email body.",
     )
@@ -76,8 +75,7 @@ def find_account(application: object, smtp_address: str) -> object:
             return account
 
     raise RuntimeError(
-        f"Outlook account {smtp_address!r} was not found. "
-        f"Available accounts: {available}"
+        f"Outlook account {smtp_address!r} was not found. Available accounts: {available}"
     )
 
 
@@ -118,8 +116,7 @@ def main() -> int:
         message.To = args.to
         message.Subject = args.subject
         message.Body = (
-            f"{args.body}\n\n"
-            f"Smoke-test timestamp: {datetime.now().astimezone().isoformat()}"
+            f"{args.body}\n\nSmoke-test timestamp: {datetime.now().astimezone().isoformat()}"
         )
 
         if args.send_as:
@@ -130,10 +127,7 @@ def main() -> int:
         message.Send()
 
         print("SUCCESS: Outlook accepted the message for sending.")
-        print(
-            "Verify the message appears in Sent Items and arrives in the "
-            "recipient mailbox."
-        )
+        print("Verify the message appears in Sent Items and arrives in the recipient mailbox.")
         return 0
 
     except Exception as exc:

@@ -50,7 +50,6 @@ def notification(destination: str = "ops-alerts") -> TeamsNotification:
 def provider(client: httpx.AsyncClient, **changes: object) -> PowerAutomateTeamsProvider:
     values: dict[str, object] = {
         "destinations": {"ops-alerts": PowerAutomateWebhook(ENDPOINT)},
-        "allowed_host_suffixes": {"logic.azure.com"},
         "client": client,
     }
     values.update(changes)
@@ -107,12 +106,15 @@ def test_webhook_requires_signed_https_url(endpoint: str) -> None:
         PowerAutomateWebhook(endpoint)
 
 
-def test_provider_enforces_dot_boundary_host_allowlist() -> None:
-    with pytest.raises(ValueError, match="approved"):
-        PowerAutomateTeamsProvider(
-            {"ops": "https://evil-logic.azure.com.attacker.test/x?sig=x"},
-            allowed_host_suffixes={"logic.azure.com"},
-        )
+async def test_provider_uses_one_signed_url_without_host_suffix_configuration() -> None:
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(202)))
+    adapter = PowerAutomateTeamsProvider(
+        {"ops": "https://long-random-host.invalid/trigger?sig=very-long-jumbled-value"},
+        client=client,
+    )
+    result = await adapter.send(notification("ops"), metadata())
+    await client.aclose()
+    assert isinstance(result, ProviderAccepted)
 
 
 async def test_unknown_destination_does_not_call_http() -> None:
@@ -198,13 +200,6 @@ async def test_optional_response_id_is_strictly_bounded() -> None:
     assert result.provider_message_id is None
 
 
-def test_webhook_host_suffix_configuration_is_required_and_canonical() -> None:
-    with pytest.raises(ValueError, match="suffixes"):
-        PowerAutomateTeamsProvider({"ops": ENDPOINT}, allowed_host_suffixes=set())
-    with pytest.raises(ValueError, match="suffixes"):
-        PowerAutomateTeamsProvider({"ops": ENDPOINT}, allowed_host_suffixes={"bad host"})
-
-
 async def test_payload_limit_can_reject_unrepresentable_base_message() -> None:
     client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(202)))
     adapter = provider(client, render_policy=TableRenderPolicy(teams_payload_bytes=1))
@@ -215,9 +210,7 @@ async def test_payload_limit_can_reject_unrepresentable_base_message() -> None:
 
 
 async def test_provider_owned_http_client_closes() -> None:
-    adapter = PowerAutomateTeamsProvider(
-        {"ops": ENDPOINT}, allowed_host_suffixes={"logic.azure.com"}
-    )
+    adapter = PowerAutomateTeamsProvider({"ops": ENDPOINT})
     assert adapter._client.is_closed is False
     await adapter.aclose()
     assert adapter._client.is_closed is True

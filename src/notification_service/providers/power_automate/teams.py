@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -29,11 +28,6 @@ from notification_service.presentation.tables import (
     reduce_largest_row_limit,
 )
 
-_HOST = re.compile(
-    r"(?=.{1,253}\Z)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
-    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
-)
-
 
 @dataclass(frozen=True, slots=True)
 class PowerAutomateWebhook:
@@ -50,6 +44,8 @@ class PowerAutomateWebhook:
             or parsed.password
             or parsed.fragment
             or not parsed.query
+            or len(self.endpoint) > 4096
+            or any(ord(character) < 32 for character in self.endpoint)
         ):
             raise ValueError("Power Automate endpoint must be a signed HTTPS URL")
 
@@ -71,30 +67,16 @@ class PowerAutomateTeamsProvider:
         self,
         destinations: Mapping[str, PowerAutomateWebhook | str],
         *,
-        allowed_host_suffixes: frozenset[str] | set[str],
         client: httpx.AsyncClient | None = None,
         render_policy: TableRenderPolicy | None = None,
         throttling_proves_not_accepted: bool = False,
     ) -> None:
         if not destinations:
             raise ValueError("At least one Teams destination must be configured")
-        suffixes = frozenset(
-            value.lower().lstrip(".").rstrip(".") for value in allowed_host_suffixes
-        )
-        if not suffixes or any(not _HOST.fullmatch(value) for value in suffixes):
-            raise ValueError("Explicit canonical Power Automate host suffixes are required")
         configured = {
             name: value if isinstance(value, PowerAutomateWebhook) else PowerAutomateWebhook(value)
             for name, value in destinations.items()
         }
-        for webhook in configured.values():
-            hostname = urlparse(webhook.endpoint).hostname
-            assert hostname is not None
-            canonical = hostname.lower().rstrip(".")
-            if not any(
-                canonical == suffix or canonical.endswith("." + suffix) for suffix in suffixes
-            ):
-                raise ValueError("Power Automate endpoint host is not deployment-approved")
         self._destinations = configured
         self._render_policy = render_policy or TableRenderPolicy()
         self._throttling_proves_not_accepted = throttling_proves_not_accepted

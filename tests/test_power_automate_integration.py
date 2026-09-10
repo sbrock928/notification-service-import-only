@@ -15,21 +15,18 @@ from notification_service import (
 from notification_service.application import DeliveryMetadata, ProviderAccepted
 
 _ENDPOINT = os.environ.get("NOTIFICATION_TEST_PA_SIGNED_URL")
-_HOST_SUFFIX = os.environ.get("NOTIFICATION_TEST_PA_HOST_SUFFIX")
 
 
 @pytest.mark.integration
 @pytest.mark.live
 @pytest.mark.skipif(
-    not _ENDPOINT or not _HOST_SUFFIX,
-    reason="Set the explicit Power Automate integration-test endpoint and host suffix",
+    not _ENDPOINT,
+    reason="Set the full Power Automate integration-test signed URL",
 )
 async def test_power_automate_schema_v2_acceptance() -> None:
     assert _ENDPOINT is not None
-    assert _HOST_SUFFIX is not None
     provider = PowerAutomateTeamsProvider(
         {"contract-test": PowerAutomateWebhook(_ENDPOINT)},
-        allowed_host_suffixes={_HOST_SUFFIX},
     )
     try:
         outcome = await provider.send(
