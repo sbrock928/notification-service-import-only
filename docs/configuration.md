@@ -1,58 +1,62 @@
 # Configuration
 
-The package never reads environment variables on import. The host application reads its secret store
-and constructs providers explicitly.
+The host reads environment variables or a secret store and passes values explicitly.
+The library never discovers configuration during import.
 
-## Initial providers
+## Outlook
 
 ```python
-import os
-
-from notification_service import (
-    PowerAutomateTeamsProvider,
-    PowerAutomateWebhook,
-    Win32OutlookEmailProvider,
-)
-
-teams_provider = PowerAutomateTeamsProvider({
-    "ops-alerts": PowerAutomateWebhook(
-        os.environ["PA_TEAMS_OPS_ALERTS_WEBHOOK"],
-        authorization_token=os.environ.get("PA_TEAMS_USER_TOKEN"),
-    ),
-    "data-quality": os.environ["PA_TEAMS_DATA_QUALITY_WEBHOOK"],
-})
-
 email_provider = Win32OutlookEmailProvider(
-    sender=os.environ.get("OUTLOOK_SHARED_MAILBOX"),
+    account_address="worker@contoso.com",
+    send_as_address="notifications@contoso.com",  # optional fixed shared mailbox
 )
 ```
 
-Never log webhook URLs, query strings, bearer tokens, message bodies, or attachment content. Keep the
-destination mapping in trusted deployment configuration; application callers receive only logical
-destination names.
+`account_address` must exist in the current classic-Outlook profile. A missing
+account is a nonretryable pre-send failure. `send_as_address` is fixed for the
+provider; the Windows identity must have Exchange Send As permission. Construct one
+provider per profile and process.
 
-The Windows worker account must have an initialized Outlook profile. A configured `sender` requires
-the corresponding send-as or send-on-behalf-of permission.
-
-## Future Graph providers
+## Power Automate
 
 ```python
-from notification_service import (
-    ClientSecretToken,
-    GraphEmailProvider,
-    GraphTeamsProvider,
-    TeamsChannel,
-)
-
-token = ClientSecretToken(tenant_id, client_id, client_secret)
-email_provider = GraphEmailProvider("shared-mailbox@contoso.com", token)
-teams_provider = GraphTeamsProvider(
-    {"ops-alerts": TeamsChannel(team_id, channel_id)},
-    delegated_teams_token,
+teams_provider = PowerAutomateTeamsProvider(
+    {"ops-alerts": PowerAutomateWebhook(signed_trigger_url)},
+    allowed_host_suffixes={"logic.azure.com"},
 )
 ```
 
-`delegated_teams_token` is an `AccessToken` implementation supplied by the host application's user
-authentication component. Current Graph channel-message sends require delegated
-`ChannelMessage.Send`; `ClientSecretToken` is not valid for routine Teams notifications. Email and
-Teams also need separate token instances so each provider owns and closes its credential lifecycle.
+Endpoints must be signed HTTPS URLs. Redirects, userinfo, fragments, bearer tokens,
+and arbitrary headers are rejected or unsupported. The explicit allowlist uses an
+exact host or dot-boundary suffix match. Environment proxies remain enabled for the
+provider-owned HTTP client. Never log the URL because its query string is a secret.
+
+## Client policy
+
+```python
+client = NotificationClient(
+    provider,
+    source_application="task-runner",
+    policies=(AllowedEmailDomainsPolicy({"contoso.com"}),),
+    retry_policy=RetryPolicy(max_attempts=2, total_timeout_seconds=120),
+)
+```
+
+Domain allowlists are exact: `contoso.com` does not permit `sub.contoso.com`.
+Production queue/redelivery callers provide an idempotency key. Lower table render
+limits may be configured with `TableRenderPolicy`; hard input ceilings cannot be
+raised.
+
+## Experimental Graph
+
+Graph imports are explicit:
+
+```python
+from notification_service.experimental.graph import ClientSecretToken, GraphEmailProvider
+```
+
+Tokens are borrowed by default. Set `owns_token=True` only when transferring
+lifecycle ownership. Graph email uses a fixed mailbox and requires `Mail.ReadWrite`
+plus `Mail.Send`, restricted with tenant/Exchange application-access policy. Graph
+Teams remains delegated-auth research and must not use migration-only application
+permission for ordinary messages.

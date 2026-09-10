@@ -1,50 +1,58 @@
-# Provider behavior
+# Provider contracts
+
+## Classic Outlook email
+
+The adapter runs all COM work in one dedicated serial executor, initializes COM on
+that worker, resolves the configured profile account before creating mail, applies
+the shared text/HTML table rendering, copies bounded attachments into private
+temporary files, and calls `MailItem.Send()`.
+
+Failures before `Send()` are known not accepted. Failures from `Send()` are
+ambiguous. The package does not request delivery/read receipts. Setting
+`SendUsingAccount` is expected to use that mailbox's Sent Items; Exchange policy
+can affect shared-mailbox sent-copy behavior and must be checked manually.
 
 ## Power Automate Teams
 
-`PowerAutomateTeamsProvider` maps a validated logical name such as `ops-alerts` to a deployment-owned
-`PowerAutomateWebhook`. Unsupported destinations are rejected without an HTTP request. The payload
-contains schema version, correlation and idempotency keys, source application, destination, title,
-and text.
+The adapter maps a logical destination to a deployment-owned signed URL and emits
+schema v2:
 
-The flow should validate the payload, construct the supported Teams message or Adaptive Card, post
-to its fixed channel, and return an optional `run_id` or `message_id`. A `2xx` response means flow
-acceptance, not Teams delivery or user read confirmation.
+```json
+{
+  "schema_version": 2,
+  "correlation_id": "corr-123",
+  "idempotency_key": "teams:job:123",
+  "source_application": "task-runner",
+  "destination": "ops-alerts",
+  "title": "Import exceptions",
+  "text": "The import produced exception records.",
+  "tables": [
+    {
+      "caption": "Exceptions",
+      "columns": ["ID", "Reason"],
+      "rows": [["1234", "Invalid status"]],
+      "omitted_row_count": 0,
+      "omitted_column_count": 0
+    }
+  ]
+}
+```
 
-Review or disable Power Automate retries unless the flow deduplicates on `idempotency_key`. A lost
-response can otherwise produce duplicate messages.
+Simple messages contain `"tables": []`. The Flow validates v2 and owns final Teams
+or Adaptive Card markup. Any `2xx` is trigger acceptance. Connect/pool failure is a
+retryable non-acceptance; lost response, write/read error, 408, 5xx, and ordinary
+429 are unknown. A deployment may opt into retryable 429 only with a documented
+endpoint guarantee that throttling occurs before acceptance.
 
-## Win32 Outlook email
+Power Automate does not provide end-to-end idempotency here. Disable unsafe Flow
+retries or deduplicate at the Flow boundary.
 
-`Win32OutlookEmailProvider` creates an Outlook mail item using the current Windows user's Outlook
-profile. It supports To/CC/BCC, text or HTML, an optional send-on-behalf-of mailbox, and bounded
-attachments. Attachment bytes are copied to a private temporary directory because the Outlook COM
-API accepts file paths; the directory is removed after Outlook has attached them.
+## Experimental Graph
 
-COM is initialized inside the same worker thread that uses it. Sends are serialized. An error before
-`MailItem.Send()` is known not to have sent; an error during `Send()` is ambiguous and is returned as
-`unknown` by the application service.
+Graph email creates a draft, adds small or chunked attachments, sends it, and
+best-effort deletes known orphan drafts. Only the send phase can mean email
+acceptance. Upload URLs are restricted to approved Outlook hosts.
 
-## Microsoft Graph migration
-
-`GraphEmailProvider` and `GraphTeamsProvider` consume the same `EmailNotification` and
-`TeamsNotification` models. Teams destinations remain logical names, mapped to configured team and
-channel IDs. Graph credentials are behind the `AccessToken` protocol; `ClientSecretToken` is the
-included unattended credential implementation for email.
-
-The two Graph providers do not currently use the same OAuth grant. Graph email can use application
-permissions (`Mail.ReadWrite` for draft/attachment operations plus `Mail.Send`). Ordinary Teams
-channel posting requires a delegated work-account token with `ChannelMessage.Send`; Graph application
-permission is reserved for data migration and must not be used for routine notifications. The host
-application must therefore supply a delegated `AccessToken` implementation to `GraphTeamsProvider`.
-
-Graph adapters are migration targets, not required for the initial deployment. Confirm permissions,
-mailbox/channel scoping, tenant policy, and production consent before selecting them.
-
-## Shared delivery semantics
-
-Providers return `ProviderAccepted` or `ProviderRejected`. `NotificationClient` maps these to:
-
-- `accepted`: the provider accepted the operation;
-- `failed`: the provider is known not to have accepted it;
-- `unknown`: acceptance may have happened, so automatic retry could duplicate it.
+Graph Teams uses delegated `ChannelMessage.Send` and conservative escaped HTML.
+It is research-only; supported formatting and permissions must be revalidated at
+migration time. Graph providers are intentionally absent from the root API.

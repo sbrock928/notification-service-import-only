@@ -1,48 +1,70 @@
-# Import-only notification client
+# Notification service client
 
-This Python library is called by an existing worker; importing it starts no server, queue,
-scheduler, or background process.
+An import-only Python 3.13 library for immediate email and Teams notifications.
+Importing it starts no server, queue, scheduler, network call, worker thread, or
+environment lookup.
 
-The initial transports are intentionally explicit:
-
-- Teams messages go to named Power Automate webhooks.
-- Email goes through the locally configured Outlook desktop client using `win32com`.
-- Microsoft Graph adapters implement the same ports for a later migration.
-
-## Structure
-
-```text
-src/notification_service/
-├── domain/                  # immutable models, outcomes, and stable errors
-├── application/             # provider ports and delivery orchestration
-├── providers/
-│   ├── power_automate/      # initial Teams transport
-│   ├── win32com/            # initial Outlook email transport
-│   └── microsoft_graph/     # future email and Teams transports
-├── client.py                # optional synchronous facade
-└── __init__.py              # supported public imports
-```
-
-Provider-specific objects do not leak into the models or application service. Moving a channel
-from Power Automate to Graph, or email from Outlook COM to Graph, only changes provider
-construction. Graph Teams currently requires delegated user authentication; see
-[provider behavior](docs/providers.md) before planning that migration.
+- Classic Outlook/Win32 COM is the active email transport.
+- Power Automate HTTP-trigger Flows are the active Teams transport.
+- Microsoft Graph is experimental migration code.
+- Calling applications select records and provide display-ready strings.
+- This package validates, escapes, bounds, summarizes, and presents optional tables.
 
 ## Install
 
-Install the Windows Outlook extra on the machine that runs Outlook:
+Install from the private artifact feed with pip. The Windows worker needs the
+Outlook extra:
 
 ```bash
-pip install "notification-service-import-only[outlook-win32]"
+python -m pip install "notification-service-import-only[outlook-win32]==0.1.0"
 ```
 
-Install the Graph extra only when that migration is enabled:
+Graph migration experiments additionally use the `graph` extra. Python 3.12 and
+non-pip workflows are unsupported.
 
-```bash
-pip install "notification-service-import-only[graph]"
+## Email example
+
+```python
+from notification_service import (
+    AllowedEmailDomainsPolicy,
+    EmailNotification,
+    NotificationClient,
+    NotificationTable,
+    Recipient,
+    Win32OutlookEmailProvider,
+)
+
+table = NotificationTable(
+    caption="Exception records",
+    columns=("Record ID", "Created", "Reason"),
+    rows=(("1234", "2026-09-09 09:15 UTC", "Invalid status"),),
+)
+
+async with NotificationClient(
+    Win32OutlookEmailProvider(
+        account_address="worker@contoso.com",
+        send_as_address="notifications@contoso.com",
+    ),
+    source_application="task-runner",
+    policies=(AllowedEmailDomainsPolicy({"contoso.com"}),),
+) as client:
+    result = await client.send(
+        EmailNotification(
+            to=(Recipient("ops@contoso.com"),),
+            subject="Import exceptions",
+            text="The import produced exception records.",
+            tables=(table,),
+        ),
+        idempotency_key=f"email:import:{job_id}",
+        correlation_id=upstream_correlation_id,
+    )
 ```
 
-## Teams through Power Automate
+Tables are optional. A simple email uses the same model with no `tables` argument.
+HTML is trusted caller content, but a non-empty plain-text body is always required.
+Table values are always escaped and never interpreted as HTML.
+
+## Teams example
 
 ```python
 import os
@@ -54,60 +76,30 @@ from notification_service import (
     TeamsNotification,
 )
 
-provider = PowerAutomateTeamsProvider({
-    "ops-alerts": PowerAutomateWebhook(
-        os.environ["PA_TEAMS_OPS_ALERTS_WEBHOOK"],
-        authorization_token=os.environ.get("PA_TEAMS_USER_TOKEN"),
-    ),
-})
-client = NotificationClient(provider)
-
-result = await client.send(TeamsNotification(
-    destination="ops-alerts",
-    title="Scheduled job failed",
-    text="Inspect the task logs.",
-    idempotency_key=f"teams:job-failed:{job_id}",
-    source_application="task-runner",
-))
-
-await client.aclose()
-```
-
-Callers select a logical destination, never a URL. The deployment-owned mapping determines the
-Power Automate flow and Teams channel.
-
-## Email through Outlook desktop
-
-```python
-from notification_service import (
-    EmailNotification,
-    NotificationClient,
-    Recipient,
-    Win32OutlookEmailProvider,
+provider = PowerAutomateTeamsProvider(
+    {"ops-alerts": PowerAutomateWebhook(os.environ["PA_TEAMS_OPS_ALERTS_SIGNED_URL"])},
+    allowed_host_suffixes={"logic.azure.com"},
 )
 
-provider = Win32OutlookEmailProvider(sender="shared-mailbox@contoso.com")
-client = NotificationClient(
+async with NotificationClient(
     provider,
-    allowed_email_domains=frozenset({"contoso.com"}),
-)
-
-result = await client.send(EmailNotification(
-    to=(Recipient("ops@contoso.com"),),
-    subject="Scheduled job failed",
-    text="Inspect the task logs.",
-    idempotency_key=f"email:job-failed:{job_id}",
     source_application="task-runner",
-))
-
-await client.aclose()
+) as client:
+    result = await client.send(
+        TeamsNotification(
+            destination="ops-alerts",
+            title="Scheduled job failed",
+            text="Inspect the task logs.",
+        ),
+        idempotency_key=f"teams:job-failed:{job_id}",
+    )
 ```
 
-The Outlook adapter performs blocking COM work on a thread and serializes sends. Outlook must be
-installed and configured under the Windows account running the worker.
+The package sends schema v2 only. Every configured Flow must support it before this
+version is deployed. A `2xx` response means that the Flow accepted the trigger,
+not that Teams delivered or a user read the message.
 
-Use the same idempotency key when the upstream queue retries. An `unknown` result means provider
-acceptance could not be determined; do not automatically create a new key and resend.
-
-See [architecture](docs/architecture.md), [provider behavior](docs/providers.md), and
-[configuration](docs/configuration.md) for operational details.
+Use the same key for upstream redelivery. `UNKNOWN` means acceptance cannot be
+proved; never generate a new key and resend automatically. See the
+[architecture](docs/architecture.md), [provider contracts](docs/providers.md),
+and [deployment checklist](docs/deployment.md).

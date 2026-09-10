@@ -1,21 +1,36 @@
-# Deployment
+# Deployment and release checklist
 
-Install the package in the existing worker. The initial email worker must run on Windows with Outlook
-desktop installed, a configured profile, and the `outlook-win32` package extra. Teams delivery only
-requires outbound HTTPS access to the configured Power Automate trigger endpoints.
+Deploy the wheel into the existing long-running queue worker. Scheduling, queueing,
+fan-out, and retry of business jobs remain outside this package.
 
-Before production, verify:
+## Required automated gates
 
-- the worker's Outlook profile can send from the configured mailbox;
-- Outlook security policy permits unattended object-model sends;
-- HTML/text and supported attachment types work under the service account;
-- every Teams destination resolves to the intended Power Automate flow and channel;
-- trigger authentication, flow ownership, secret rotation, and connector retry policy;
-- timeouts and lost final responses produce an operational review instead of blind resend;
-- the upstream queue reuses idempotency keys on business-task retries;
-- graceful shutdown calls `await client.aclose()`.
+- Azure DevOps Linux and Windows jobs pass on Python 3.13.
+- The wheel installs from reviewed constraints and imports outside the source tree.
+- Lint, format, strict mypy, 90% branch coverage, build, and pip check pass.
+- Windows installs `.[dev,outlook-win32]` and runs offline fake-COM tests.
 
-For Graph migration, separately verify tenant consent, email application-permission scope, the Teams
-delegated-authentication flow, mailbox and channel scope, Conditional Access, token rotation, and
-outbound Graph connectivity. Microsoft currently limits application-only channel posting to migration
-scenarios, so an unattended client secret cannot replace the Power Automate Teams flow directly.
+## Outlook release checks
+
+- Run under the intended signed-in Windows user with classic Outlook configured.
+- Confirm the exact `account_address` is present.
+- Send a controlled direct-account email.
+- Send a controlled shared-mailbox email with Exchange Send As permission.
+- Verify the selected mailbox's Sent Items behavior.
+- Verify text, escaped HTML tables, Unicode filenames, and supported attachments.
+- Confirm one worker process owns the Outlook profile and shutdown drains work.
+
+## Power Automate release checks
+
+- Upgrade every Flow to schema v2 before deploying this package.
+- During rollout, a Flow may temporarily accept v1 and v2; this package emits v2 only.
+- Confirm each logical destination maps to the intended Flow and Teams channel.
+- Run the opt-in schema-v2 integration test with simple and table messages.
+- Review Flow/connector retries and the absence of end-to-end idempotency.
+- Confirm proxy routing, host allowlists, secret rotation, and URL redaction.
+
+Treat `UNKNOWN` as an operator-review state. Do not create a new key for an
+immediate resend. Resolve it explicitly to accepted or failed after investigation.
+
+Graph has no live release gate until migration Stage B. See
+[MIGRATION_ROADMAP.md](MIGRATION_ROADMAP.md).

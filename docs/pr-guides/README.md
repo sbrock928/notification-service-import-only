@@ -1,15 +1,9 @@
-# Incremental implementation guide
+# Refactor review guide
 
-The repository can be reviewed as six independent changes. The order preserves the dependency rule:
-domain depends on nothing, application depends on domain, and providers depend on both.
+The obsolete six-PR prototype guides were retired when the production-grade plan
+was approved. Review the ten-stage sequence, compatibility decisions, acceptance
+criteria, and commit intent in [REFACTOR_PLAN.md](../REFACTOR_PLAN.md).
 
-| PR | Commit | Result |
-|---|---|---|
-| 1 | `refactor(domain): define email and Teams contracts` | Immutable provider-neutral models and outcomes |
-| 2 | `refactor(application): generalize notification orchestration` | Typed provider port, delivery states, retry, and idempotency |
-| 3 | `feat(outlook): add win32com email provider` | Initial Outlook desktop email transport |
-| 4 | `feat(teams): add Power Automate provider` | Initial named-destination Teams transport |
-| 5 | `feat(graph): add future Microsoft Graph providers` | Drop-in migration adapters for Outlook and Teams |
-| 6 | `test(docs): verify providers and document operations` | Tests, deployment gates, and examples |
-
-After each PR, run `ruff check src tests`, `mypy src`, and `pytest -q`.
+Local implementation commits are intentionally sequential and are not pushed by
+this repository task. Run the complete gates in [testing.md](../testing.md) before
+publishing or splitting the work into remote pull requests.

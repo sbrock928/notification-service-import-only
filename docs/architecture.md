@@ -1,42 +1,44 @@
 # Architecture
 
-The package follows a small ports-and-adapters layout. Domain and application code contain no
-Power Automate, COM, Outlook, or Graph types.
+The package uses provider-neutral content, application orchestration, and replaceable
+infrastructure adapters.
 
 ```mermaid
 flowchart LR
-  Worker[Existing task worker] --> EmailClient[NotificationClient EmailNotification]
-  Worker --> TeamsClient[NotificationClient TeamsNotification]
-  EmailClient --> EmailPort[NotificationProvider EmailNotification]
-  TeamsClient --> TeamsPort[NotificationProvider TeamsNotification]
-  EmailPort --> COM[Win32OutlookEmailProvider]
-  TeamsPort --> PA[PowerAutomateTeamsProvider]
-  COM --> Outlook[Outlook desktop]
-  PA --> Flow[Power Automate flow]
-  Flow --> Teams[Teams channel]
-  EmailPort -. future .-> GraphEmail[GraphEmailProvider]
-  TeamsPort -. future .-> GraphTeams[GraphTeamsProvider]
+  Caller[Calling application or queue worker] --> Content[Immutable channel content]
+  Caller --> Client[NotificationClient]
+  Client --> Policy[Application policies]
+  Client --> Idem[Atomic idempotency]
+  Client --> Port[Typed provider port]
+  Port --> Outlook[Classic Outlook]
+  Port --> Flow[Power Automate Flow]
+  Port -. experimental .-> Graph[Microsoft Graph]
 ```
 
-`NotificationClient` owns validation policy, timeouts, conservative retries, normalized delivery
-states, and optional idempotency. Providers only translate a domain notification into one external
-transport.
+The caller owns business selection, labels, ordering, and display-ready values. The
+library owns validation, escaping, channel limits, table presentation, delivery
+certainty, retry, idempotency, lifecycle, and sanitized operational events. It has
+no database, template engine, hosted API, queue, scheduler, or fan-out coordinator.
 
-The primary API is asynchronous. Power Automate and Graph are network I/O; Outlook COM is moved to
-a worker thread and serialized because the Outlook object model is synchronous. The optional
-`SyncNotificationClient` owns a private event-loop thread for strictly synchronous callers.
+Content models contain no correlation ID, source application, or idempotency key.
+Those values describe a delivery and are supplied to `NotificationClient.send()`.
+The client passes immutable delivery metadata to the provider.
 
-Provider construction is the migration boundary:
+One typed client owns one provider and one event loop. Many tasks may use it on that
+loop, but it must not cross loops or threads. The sync facade owns a dedicated loop
+thread. Both facades own provider shutdown.
 
-```python
-# Initial
-email_client = NotificationClient(Win32OutlookEmailProvider())
-teams_client = NotificationClient(PowerAutomateTeamsProvider(webhooks))
+## Delivery certainty
 
-# Later; notification construction and send calls are unchanged
-email_client = NotificationClient(GraphEmailProvider(mailbox, token))
-teams_client = NotificationClient(GraphTeamsProvider(channels, token))
-```
+`ACCEPTED` means the transport accepted the operation. `FAILED` means the package
+can prove it was not accepted. `UNKNOWN` means acceptance may have occurred. Only a
+proven transient non-acceptance can retry. The default is two attempts within one
+120-second budget.
 
-The included idempotency store is process-local. The calling application should implement the
-`IdempotencyStore` protocol with shared storage when duplicate protection must survive restarts.
+Idempotency scopes a caller key by source application and channel. An atomic claim
+ensures concurrent identical calls produce one provider invocation. Conflicting
+content fails immediately. Accepted and known-failed values expire after 24 hours;
+unknown values require explicit operator resolution.
+
+See [REFACTOR_PLAN.md](REFACTOR_PLAN.md) for the complete decisions and
+[adrs](adrs/README.md) for concise decision records.
