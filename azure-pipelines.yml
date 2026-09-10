@@ -1,0 +1,51 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+stages:
+  - stage: Validate
+    jobs:
+      - job: Linux
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.13"
+          - script: python -m pip install --upgrade pip
+            displayName: Upgrade pip
+          - script: python -m pip install -c constraints/py313.txt -e ".[dev,graph]"
+            displayName: Install reviewed dependencies
+          - script: ruff check . && ruff format --check .
+            displayName: Lint and format
+          - script: mypy src
+            displayName: Type check
+          - script: pytest --cov=notification_service --cov-branch --cov-fail-under=90
+            displayName: Test
+          - script: python -m build && python -m pip check
+            displayName: Build and dependency check
+          - script: |
+              python -m pip install --force-reinstall --no-deps dist/*.whl
+              cd "$(Agent.TempDirectory)"
+              python -c "import notification_service"
+            displayName: Verify wheel import
+
+      - job: Windows
+        pool:
+          vmImage: windows-latest
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.13"
+          - script: python -m pip install --upgrade pip
+            displayName: Upgrade pip
+          - script: python -m pip install -c constraints/py313.txt -e ".[dev,outlook-win32]"
+            displayName: Install Outlook test dependencies
+          - script: pytest -m "not live" tests
+            displayName: Run offline fake-COM tests
