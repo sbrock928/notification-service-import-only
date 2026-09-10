@@ -66,6 +66,7 @@ class GraphEmailProvider(GraphProviderBase):
             ],
         }
         draft_url: str | None = None
+        send_invoked = False
         try:
             draft = await self._client.post(root + "/messages", headers=headers, json=message)
             if draft.status_code not in {200, 201}:
@@ -89,6 +90,7 @@ class GraphEmailProvider(GraphProviderBase):
             if attachment_failure is not None:
                 await self._delete_draft(draft_url, headers)
                 return attachment_failure
+            send_invoked = True
             response = await self._client.post(draft_url + "/send", headers=headers)
             if response.status_code == 202:
                 return ProviderAccepted(provider_message_id=reference)
@@ -103,9 +105,11 @@ class GraphEmailProvider(GraphProviderBase):
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
             if draft_url is not None:
                 await self._delete_draft(draft_url, headers)
-            return self._network_failure(request_could_be_accepted=draft_url is not None)
+            return self._network_failure(request_could_be_accepted=send_invoked)
         except httpx.HTTPError:
-            return self._network_failure(request_could_be_accepted=draft_url is not None)
+            if draft_url is not None and not send_invoked:
+                await self._delete_draft(draft_url, headers)
+            return self._network_failure(request_could_be_accepted=send_invoked)
 
     async def _add_attachments(
         self,

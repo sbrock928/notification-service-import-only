@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Protocol
 from uuid import uuid4
@@ -182,7 +182,7 @@ class InMemoryIdempotencyStore:
                 and result.state is not DeliveryState.UNKNOWN
             ):
                 return
-            record.result = result
+            record.result = replace(result, correlation_id=record.correlation_id)
             record.completed_at = self._clock()
             record.event.set()
 
@@ -217,6 +217,6 @@ class InMemoryIdempotencyStore:
                 raise IdempotencyConflict("Unknown delivery does not match the supplied scope")
             if record.result is None or record.result.state is not DeliveryState.UNKNOWN:
                 raise ValueError("Only unknown deliveries can be resolved")
-            record.result = result
+            record.result = replace(result, correlation_id=record.correlation_id)
             record.completed_at = self._clock()
             record.event.set()

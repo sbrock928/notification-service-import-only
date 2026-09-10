@@ -208,8 +208,9 @@ def test_webhook_host_suffix_configuration_is_required_and_canonical() -> None:
 async def test_payload_limit_can_reject_unrepresentable_base_message() -> None:
     client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(202)))
     adapter = provider(client, render_policy=TableRenderPolicy(teams_payload_bytes=1))
-    with pytest.raises(Exception, match="cannot fit"):
-        await adapter.send(notification(), metadata())
+    result = await adapter.send(notification(), metadata())
+    assert isinstance(result, ProviderFailure)
+    assert result.certainty is AcceptanceCertainty.NOT_ACCEPTED
     await client.aclose()
 
 

@@ -80,7 +80,13 @@ class Recipient:
         if self.address.count("@") != 1:
             raise ValidationError("Invalid email address")
         local, domain = self.address.rsplit("@", 1)
-        if not _LOCAL_PART.fullmatch(local) or not _DOMAIN.fullmatch(domain):
+        if (
+            not _LOCAL_PART.fullmatch(local)
+            or local.startswith(".")
+            or local.endswith(".")
+            or ".." in local
+            or not _DOMAIN.fullmatch(domain)
+        ):
             raise ValidationError("Invalid email address")
         object.__setattr__(self, "address", f"{local}@{domain.lower()}")
 

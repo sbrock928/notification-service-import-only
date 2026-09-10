@@ -102,21 +102,28 @@ class NotificationClient[NotificationT: Notification]:
         deadline = loop.time() + self._retry.total_timeout_seconds
         claim: IdempotencyClaim | None = None
         if idempotency_key is not None:
-            claim = await self._idempotency.claim(
-                IdempotencyScope(self._source_application, notification.channel, idempotency_key),
-                notification.fingerprint,
-                correlation_id,
-                self._lease_seconds,
+            scope = IdempotencyScope(
+                self._source_application, notification.channel, idempotency_key
             )
-            if claim.status is ClaimStatus.REPLAY:
-                assert claim.result is not None
-                self._log(notification, claim.result, 0, "replay", None)
-                return claim.result
-            if claim.status is ClaimStatus.WAIT:
+            while True:
+                claim = await self._idempotency.claim(
+                    scope,
+                    notification.fingerprint,
+                    correlation_id,
+                    self._lease_seconds,
+                )
+                if claim.status is ClaimStatus.REPLAY:
+                    assert claim.result is not None
+                    self._log(notification, claim.result, 0, "replay", None)
+                    return claim.result
+                if claim.status is ClaimStatus.ACQUIRED:
+                    break
                 result = await self._idempotency.wait(claim, max(0.0, deadline - loop.time()))
                 if result is not None:
                     self._log(notification, result, 0, "wait_replay", None)
                     return result
+                if loop.time() < deadline:
+                    continue
                 return DeliveryResult(
                     state=DeliveryState.UNKNOWN,
                     correlation_id=correlation_id,
@@ -349,6 +356,9 @@ class NotificationClient[NotificationT: Notification]:
             if not done:
                 self._background_tasks.add(close_task)
                 close_task.add_done_callback(self._background_tasks.discard)
+        else:
+            self._background_tasks.add(close_task)
+            close_task.add_done_callback(self._background_tasks.discard)
 
     async def __aenter__(self) -> Self:
         self._bind_loop()

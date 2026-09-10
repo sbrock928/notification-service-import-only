@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -23,7 +24,7 @@ class NotificationPolicy(Protocol):
 class AllowedEmailDomainsPolicy:
     domains: frozenset[str]
 
-    def __init__(self, domains: frozenset[str] | set[str]) -> None:
+    def __init__(self, domains: Iterable[str]) -> None:
         normalized = frozenset(domain.lower().rstrip(".") for domain in domains)
         if not normalized or any(not _DOMAIN.fullmatch(domain) for domain in normalized):
             raise ValueError("Allowed email domains must be exact canonical domains")

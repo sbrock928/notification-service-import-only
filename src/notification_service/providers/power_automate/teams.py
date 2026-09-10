@@ -117,9 +117,20 @@ class PowerAutomateTeamsProvider:
                 error_code=DeliveryErrorCode.DESTINATION_NOT_CONFIGURED,
                 diagnostic_code="power_automate_destination_missing",
             )
-        payload = self._payload(notification, metadata)
         try:
-            response = await self._client.post(webhook.endpoint, json=payload)
+            payload = self._payload(notification, metadata)
+        except ValidationError:
+            return ProviderFailure(
+                certainty=AcceptanceCertainty.NOT_ACCEPTED,
+                error_code=DeliveryErrorCode.REQUEST_REJECTED,
+                diagnostic_code="power_automate_payload_too_large",
+            )
+        try:
+            response = await self._client.post(
+                webhook.endpoint,
+                json=payload,
+                follow_redirects=False,
+            )
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
             return ProviderFailure(
                 certainty=AcceptanceCertainty.NOT_ACCEPTED,
