@@ -27,7 +27,7 @@ fan-out, and retry of business jobs remain outside this package.
 - Confirm each logical destination maps to the intended Flow and Teams channel.
 - Run the opt-in schema-v2 integration test with simple and table messages.
 - Review Flow/connector retries and the absence of end-to-end idempotency.
-- Confirm proxy routing, host allowlists, secret rotation, and URL redaction.
+- Confirm proxy routing, complete signed-URL secret rotation, and URL redaction.
 
 Treat `UNKNOWN` as an operator-review state. Do not create a new key for an
 immediate resend. Resolve it explicitly to accepted or failed after investigation.

@@ -22,14 +22,15 @@ provider per profile and process.
 ```python
 teams_provider = PowerAutomateTeamsProvider(
     {"ops-alerts": PowerAutomateWebhook(signed_trigger_url)},
-    allowed_host_suffixes={"logic.azure.com"},
 )
 ```
 
-Endpoints must be signed HTTPS URLs. Redirects, userinfo, fragments, bearer tokens,
-and arbitrary headers are rejected or unsupported. The explicit allowlist uses an
-exact host or dot-boundary suffix match. Environment proxies remain enabled for the
-provider-owned HTTP client. Never log the URL because its query string is a secret.
+Endpoints are one complete signed HTTPS URL, including the provider-generated query
+signature and its other opaque/jumbled parameters. Redirects, userinfo, fragments,
+bearer tokens, and arbitrary headers are rejected or unsupported. There is no
+separate host-suffix setting: keep the complete URL in the deployment secret store
+and never log it because its query string is a secret. Environment proxies remain
+enabled for the provider-owned HTTP client.
 
 ## Client policy
 

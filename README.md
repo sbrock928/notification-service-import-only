@@ -15,8 +15,8 @@ environment lookup.
 Install from the private artifact feed with pip. The Windows worker needs the
 Outlook extra:
 
-```bash
-python -m pip install "notification-service-import-only[outlook-win32]==0.1.0"
+```powershell
+py -3.13 -m pip install "notification-service-import-only[outlook-win32]==0.1.0"
 ```
 
 Graph migration experiments additionally use the `graph` extra. Python 3.12 and
@@ -27,15 +27,15 @@ non-pip workflows are unsupported.
 The repository is intentionally pip-based. Use a fresh Python 3.13 virtual
 environment for local work; do not install project dependencies globally.
 
-```bash
+```powershell
 git clone <private-repository-url> notification-service-import-only
 cd notification-service-import-only
 git switch -c feature/short-description
 
-python3.13 -m venv .venv
-source .venv/bin/activate                 # Windows: .venv\\Scripts\\activate
+py -3.13 -m venv .venv
+.venv\\Scripts\\Activate.ps1
 python -m pip install --upgrade pip pip-tools
-pip-sync constraints/py313.txt
+.venv\\Scripts\\pip-sync.exe constraints/py313.txt
 python -m pip install --no-deps -e ".[dev,graph]"
 ```
 
@@ -54,9 +54,29 @@ reviewed constraints in a disposable Python 3.13 environment, run the complete
 gate, and review the diff before committing. Keep application secrets, signed
 Power Automate URLs, and live credentials outside the repository.
 
+To recompile the reviewed lock file from `pyproject.toml`, activate the project
+virtual environment and run `pip-compile` with the same extras used by CI:
+
+```powershell
+pip-compile.exe pyproject.toml `
+  --extra dev `
+  --extra graph `
+  --extra outlook-win32 `
+  --output-file constraints/py313.txt `
+  --resolver=backtracking
+pip-sync.exe constraints/py313.txt
+```
+
+Inspect the generated diff, including dependency markers, before committing.
+Re-run the full quality gate after every dependency change.
+
+Use [env.example](env.example) as the starting point for local configuration;
+copy it to an untracked `.env` only for tooling that explicitly loads dotenv
+files, or set the variables in the worker's Windows secret store.
+
 Run the same checks used by CI from the repository root:
 
-```bash
+```powershell
 ruff check .
 ruff format --check .
 mypy src
@@ -66,9 +86,8 @@ python -m pip check
 ```
 
 The default test suite is offline. The Power Automate check is opt-in only:
-provide `NOTIFICATION_TEST_PA_SIGNED_URL` and
-`NOTIFICATION_TEST_PA_HOST_SUFFIX`, then run
-`pytest -m 'integration and live'`. Real Outlook verification is a controlled
+provide `NOTIFICATION_TEST_PA_SIGNED_URL` with the complete provider-generated
+signed URL, then run `pytest -m 'integration and live'`. Real Outlook verification is a controlled
 Windows release check, never a normal test run.
 
 For changes, add or update a focused test, run the complete gate, and make small
@@ -132,7 +151,6 @@ from notification_service import (
 
 provider = PowerAutomateTeamsProvider(
     {"ops-alerts": PowerAutomateWebhook(os.environ["PA_TEAMS_OPS_ALERTS_SIGNED_URL"])},
-    allowed_host_suffixes={"logic.azure.com"},
 )
 
 async with NotificationClient(
@@ -204,6 +222,15 @@ repository) with this boundary:
 REST API -> authenticated command/queue edge -> durable job worker
                                          -> NotificationClient (this package)
 ```
+
+If authentication is split into its own service, that service issues the
+organization's access tokens and owns user/session policy. The REST edge validates
+the token (issuer, audience, expiry, tenant, and scopes) and maps the caller to an
+allowed source application; it does not forward user credentials to this library.
+The queue worker uses its own service identity to call the notification client,
+while this package remains unaware of users, passwords, sessions, and token
+issuance. Authorization is enforced again at the API/queue boundary for status
+lookups and operator resolution.
 
 The implementation sequence is:
 

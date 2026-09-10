@@ -6,8 +6,10 @@ installation, webhook, Azure tenant, or Microsoft credential.
 Start with [development.md](development.md) for cloning, virtual-environment
 creation, `pip-sync`, and editable installation.
 
-```bash
-python -m pip install -c constraints/py313.txt -e ".[dev,graph]"
+```powershell
+python -m pip install --upgrade pip pip-tools
+.venv\Scripts\pip-sync.exe constraints/py313.txt
+python -m pip install --no-deps -e ".[dev,graph]"
 ruff check .
 ruff format --check .
 mypy src

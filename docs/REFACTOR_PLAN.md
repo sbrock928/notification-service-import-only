@@ -110,9 +110,11 @@ idempotency status. Recipient addresses, titles, bodies, tables, attachment name
 or bytes, signed URLs and query strings, tokens, secrets, and authorization
 headers are never logged.
 
-Power Automate accepts only signed HTTPS URLs on explicit deployment-owned host
-suffixes. Userinfo and fragments are rejected, redirects are disabled, environment
-proxies remain enabled, and arbitrary headers and bearer tokens are unsupported.
+Power Automate accepts one complete provider-generated signed HTTPS URL per
+logical destination. The opaque signature and other jumbled query values stay
+embedded in that single secret; there is no separate host-suffix configuration.
+Userinfo and fragments are rejected, redirects are disabled, environment proxies
+remain enabled, and arbitrary headers and bearer tokens are unsupported.
 Any 2xx response means trigger acceptance.
 
 Outlook uses one dedicated serial COM worker per provider. It resolves a required
@@ -149,9 +151,11 @@ Implementation is delivered as sequential local commits without pushing.
 
 ## Quality gates
 
-```bash
+```powershell
 python -m pip install --upgrade pip
-python -m pip install -c constraints/py313.txt -e ".[dev,graph]"
+python -m pip install pip-tools
+.venv\Scripts\pip-sync.exe constraints/py313.txt
+python -m pip install --no-deps -e ".[dev,graph]"
 ruff check .
 ruff format --check .
 mypy src

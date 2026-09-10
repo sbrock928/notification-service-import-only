@@ -28,6 +28,12 @@ Accepted` with an operation ID. It validates versioned content and tables, claim
 durable scoped idempotency before enqueueing, and never calls providers directly.
 The existing worker then uses this package's typed clients and delivery semantics.
 
+An eventual authentication service should issue the access tokens used by that
+edge. The edge validates issuer, audience, expiry, tenant, and scopes, maps the
+caller to an allowed source application, and records security/audit events. The
+worker uses a separate service identity; this package receives no user credentials
+and does not implement login, sessions, or token issuance.
+
 Keep `queued` and `in_progress` as API/job states; `accepted`, `failed`, and
 `unknown` remain delivery states. A durable idempotency adapter must preserve
 atomic claim, wait/replay, conflict, lease expiry, unknown resolution, and late

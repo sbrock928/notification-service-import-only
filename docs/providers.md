@@ -14,8 +14,9 @@ can affect shared-mailbox sent-copy behavior and must be checked manually.
 
 ## Power Automate Teams
 
-The adapter maps a logical destination to a deployment-owned signed URL and emits
-schema v2:
+The adapter maps a logical destination to one deployment-owned complete signed URL
+and emits schema v2. The URL's opaque query string is part of the secret; there is
+no separate host-suffix configuration:
 
 ```json
 {

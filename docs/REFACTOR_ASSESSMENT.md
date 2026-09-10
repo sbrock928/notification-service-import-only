@@ -61,13 +61,13 @@ installation, webhook, or Graph tenant was used.
 ## Baseline verification
 
 The machine used for this audit has Python 3.12.10 and no `python` or Python 3.13 executable. A clean
-temporary virtual environment was created with `python3 -m venv`; the project and development extras
+temporary virtual environment was created with `py -3.12 -m venv`; the project and development extras
 were installed through pip. No project dependency was installed with `uv`.
 
 | Check | Observed result |
 |---|---|
-| `python3 --version` | Python 3.12.10 |
-| `python3 -m pip install -e ".[dev]"` in a clean temporary venv | Passed |
+| `py -3.12 --version` | Python 3.12.10 |
+| `py -3.12 -m pip install -e ".[dev]"` in a clean temporary venv | Passed |
 | `python -m pytest -q` after editable install | 13 passed |
 | `ruff check .` | Passed |
 | `ruff format --check .` | Failed: Python blocks in `README.md` and `docs/configuration.md` would be reformatted |
