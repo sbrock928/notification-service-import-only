@@ -12,6 +12,19 @@ Requirements:
     - A Teams Workflows/Power Automate workflow created from
       "Send webhook alerts to a channel"
 
+Corporate proxy and Zscaler setup (PowerShell):
+    # Use the approved corporate proxy address. HTTPX honors these variables.
+    $env:HTTPS_PROXY = "http://proxy.contoso.com:8080"
+    $env:HTTP_PROXY = $env:HTTPS_PROXY
+    $env:NO_PROXY = ""
+
+    # Export the Zscaler root CA from certmgr.msc as Base-64 X.509 (.CER).
+    # It must contain PEM text beginning with -----BEGIN CERTIFICATE-----.
+    $env:SSL_CERT_FILE = "C:\ProgramData\Contoso\certs\zscaler-root.pem"
+
+    # The library does not load .env files automatically. Set these variables
+    # in the same PowerShell process that launches this script.
+
 Recommended environment variables:
     NOTIFICATION_TEST_PA_SIGNED_URL
 
