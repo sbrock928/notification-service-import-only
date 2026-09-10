@@ -18,7 +18,7 @@ Recommended environment variables:
 Example (PowerShell):
     $env:NOTIFICATION_TEST_PA_SIGNED_URL = "<signed Power Automate URL>"
 
-    python teams_channel_smoke_test.py --destination ops-alerts
+    python teams_channel_smoke_test.py
 
 Security:
     Never hard-code or commit the signed Power Automate URL. Treat it like a
@@ -52,11 +52,6 @@ def parse_args() -> argparse.Namespace:
             "Complete Teams workflow webhook URL. Prefer the "
             "NOTIFICATION_TEST_PA_SIGNED_URL environment variable."
         ),
-    )
-    parser.add_argument(
-        "--destination",
-        default="teams-smoke-test",
-        help="Logical destination label for the smoke-test message.",
     )
     parser.add_argument(
         "--title",

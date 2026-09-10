@@ -105,7 +105,7 @@ Use a controlled channel and a newly generated idempotency key:
 
 ```powershell
 $env:NOTIFICATION_TEST_PA_SIGNED_URL = "<complete copied workflow URL>"
-py -3.13 teams_channel_smoke_test.py --destination ops-alerts
+py -3.13 teams_channel_smoke_test.py
 ```
 
 A successful HTTP 2xx proves that the workflow accepted the webhook. Confirm the
