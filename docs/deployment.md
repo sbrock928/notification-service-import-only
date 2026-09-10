@@ -22,10 +22,10 @@ fan-out, and retry of business jobs remain outside this package.
 
 ## Power Automate release checks
 
-- Upgrade every Flow to schema v2 before deploying this package.
-- During rollout, a Flow may temporarily accept v1 and v2; this package emits v2 only.
+- Create or upgrade every destination to the non-premium **Send webhook alerts to a
+  channel** workflow before deploying this package.
 - Confirm each logical destination maps to the intended Flow and Teams channel.
-- Run the opt-in schema-v2 integration test with simple and table messages.
+- Run the opt-in Teams webhook integration test with simple and table messages.
 - Review Flow/connector retries and the absence of end-to-end idempotency.
 - Confirm proxy routing, complete signed-URL secret rotation, and URL redaction.
 

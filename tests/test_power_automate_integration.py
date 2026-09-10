@@ -1,4 +1,4 @@
-"""Opt-in schema-v2 acceptance check against a controlled Power Automate Flow."""
+"""Opt-in Teams webhook acceptance check against a controlled workflow."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ _ENDPOINT = os.environ.get("NOTIFICATION_TEST_PA_SIGNED_URL")
     not _ENDPOINT,
     reason="Set the full Power Automate integration-test signed URL",
 )
-async def test_power_automate_schema_v2_acceptance() -> None:
+async def test_power_automate_teams_webhook_acceptance() -> None:
     assert _ENDPOINT is not None
     provider = PowerAutomateTeamsProvider(
         {"contract-test": PowerAutomateWebhook(_ENDPOINT)},
@@ -33,7 +33,7 @@ async def test_power_automate_schema_v2_acceptance() -> None:
             TeamsNotification(
                 destination="contract-test",
                 title="Notification service contract test",
-                text="This is an explicitly requested schema-v2 integration test.",
+                text="This is an explicitly requested Teams webhook integration test.",
                 tables=(
                     NotificationTable(
                         caption="Contract values",

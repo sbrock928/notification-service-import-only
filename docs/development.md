@@ -78,4 +78,6 @@ belong to the release checklist, not the developer loop.
 
 Read [README.md](../README.md#future-implementation-phases) for the Graph email
 migration, Teams transport decision, and separately deployed REST ingestion plan.
+For the active non-premium Teams workflow, follow
+[power_automate_setup.md](power_automate_setup.md).
 Read [REFACTOR_PLAN.md](REFACTOR_PLAN.md) before changing a public contract.

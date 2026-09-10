@@ -1,4 +1,4 @@
-"""Teams delivery through named Power Automate HTTP-trigger flows."""
+"""Teams delivery through non-premium Power Automate Teams webhook workflows."""
 
 from __future__ import annotations
 
@@ -28,10 +28,12 @@ from notification_service.presentation.tables import (
     reduce_largest_row_limit,
 )
 
+_WEBHOOK_PAYLOAD_LIMIT = 28_000
+
 
 @dataclass(frozen=True, slots=True)
 class PowerAutomateWebhook:
-    """A deployment-owned signed URL for one logical destination."""
+    """A deployment-owned Teams workflow webhook URL for one destination."""
 
     endpoint: str = field(repr=False)
 
@@ -50,18 +52,94 @@ class PowerAutomateWebhook:
             raise ValueError("Power Automate endpoint must be a signed HTTPS URL")
 
 
-def _table_value(table: BoundedTable) -> dict[str, object]:
+def _text_block(
+    text: str,
+    *,
+    weight: str | None = None,
+    size: str | None = None,
+    spacing: str | None = None,
+) -> dict[str, object]:
+    block: dict[str, object] = {"type": "TextBlock", "text": text, "wrap": True}
+    if weight is not None:
+        block["weight"] = weight
+    if size is not None:
+        block["size"] = size
+    if spacing is not None:
+        block["spacing"] = spacing
+    return block
+
+
+def _column_set(values: tuple[str, ...], *, header: bool = False) -> dict[str, object]:
     return {
-        "caption": table.caption,
-        "columns": list(table.columns),
-        "rows": [list(row) for row in table.rows],
-        "omitted_row_count": table.omitted_rows,
-        "omitted_column_count": table.omitted_columns,
+        "type": "ColumnSet",
+        "spacing": "Small",
+        "separator": header,
+        "columns": [
+            {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                    _text_block(
+                        value,
+                        weight="Bolder" if header else None,
+                    )
+                ],
+            }
+            for value in values
+        ],
+    }
+
+
+def _adaptive_card(
+    notification: TeamsNotification,
+    metadata: DeliveryMetadata,
+    tables: tuple[BoundedTable, ...],
+) -> dict[str, object]:
+    body: list[dict[str, object]] = []
+    if notification.title:
+        body.append(_text_block(notification.title, weight="Bolder", size="Large"))
+    body.append(_text_block(notification.text))
+    body.append(
+        {
+            "type": "FactSet",
+            "spacing": "Medium",
+            "facts": [
+                {"title": "Source", "value": metadata.source_application},
+                {"title": "Correlation", "value": metadata.correlation_id},
+            ],
+        }
+    )
+    for table in tables:
+        if table.caption:
+            body.append(_text_block(table.caption, weight="Bolder", spacing="Medium"))
+        body.append(_column_set(table.columns, header=True))
+        body.extend(_column_set(row) for row in table.rows)
+        omitted: list[str] = []
+        if table.omitted_rows:
+            omitted.append(f"{table.omitted_rows} row(s) omitted")
+        if table.omitted_columns:
+            omitted.append(f"{table.omitted_columns} column(s) omitted")
+        if omitted:
+            body.append(_text_block("Presentation summary: " + "; ".join(omitted)))
+    return {
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "contentUrl": None,
+                "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.2",
+                    "body": body,
+                },
+            }
+        ],
     }
 
 
 class PowerAutomateTeamsProvider:
-    """Resolve a logical destination and invoke its preconfigured schema-v2 Flow."""
+    """Invoke a configured Teams workflow using an Adaptive Card webhook envelope."""
 
     def __init__(
         self,
@@ -180,20 +258,11 @@ class PowerAutomateTeamsProvider:
                 self._render_policy,
                 row_limits=tuple(row_limits),
             )
-            payload: dict[str, object] = {
-                "schema_version": 2,
-                "correlation_id": metadata.correlation_id,
-                "idempotency_key": metadata.idempotency_key,
-                "source_application": metadata.source_application,
-                "destination": notification.destination,
-                "title": notification.title,
-                "text": notification.text,
-                "tables": [_table_value(table) for table in tables],
-            }
-            if (
-                len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-                <= self._render_policy.teams_payload_bytes
-            ):
+            payload = _adaptive_card(notification, metadata, tables)
+            payload_size = len(
+                json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            )
+            if payload_size <= min(self._render_policy.teams_payload_bytes, _WEBHOOK_PAYLOAD_LIMIT):
                 return payload
             if not reduce_largest_row_limit(row_limits):
                 raise ValidationError(

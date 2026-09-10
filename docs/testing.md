@@ -22,8 +22,8 @@ The suites cover import/no-configuration behavior, immutable content, fingerprin
 vectors, table escaping and omission counts, recipient/attachment limits, atomic
 concurrency, wait/replay/conflict, leases/TTL/resolution, deterministic retry,
 cancellation and late completion, lifecycle, log redaction boundaries, Outlook
-serialization, Power Automate v2, and experimental Graph contracts.
+serialization, Power Automate Teams webhook cards, and experimental Graph contracts.
 
-Set up a separate opt-in test to send schema v2 to a controlled Flow; never put a
-signed URL in source or test output. Real Outlook and Power Automate checks are
+Set up a separate opt-in test to send an Adaptive Card webhook to a controlled
+workflow; never put a signed URL in source or test output. Real Outlook and Power Automate checks are
 manual release gates, not unit tests.

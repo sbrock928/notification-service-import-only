@@ -1,16 +1,16 @@
 """Real Microsoft Teams channel smoke test through Power Automate.
 
 Purpose:
-    Prove that Python can invoke the signed Power Automate HTTP-trigger URL used
-    by notification-service-import-only and that the Flow can post the message
-    into its configured Microsoft Teams channel.
+    Prove that Python can invoke the Teams webhook URL created by the
+    Power Automate "Send webhook alerts to a channel" workflow and that the
+    workflow can post the message into its configured channel.
 
 Requirements:
     - Python 3.13
     - httpx installed:
         python -m pip install httpx
-    - A Power Automate Flow with an HTTP trigger
-    - The Flow must post the received content into the desired Teams channel
+    - A Teams Workflows/Power Automate workflow created from
+      "Send webhook alerts to a channel"
 
 Recommended environment variables:
     NOTIFICATION_TEST_PA_SIGNED_URL
@@ -49,14 +49,14 @@ def parse_args() -> argparse.Namespace:
         "--url",
         default=os.getenv("NOTIFICATION_TEST_PA_SIGNED_URL"),
         help=(
-            "Signed Power Automate HTTP-trigger URL. Prefer the "
+            "Complete Teams workflow webhook URL. Prefer the "
             "NOTIFICATION_TEST_PA_SIGNED_URL environment variable."
         ),
     )
     parser.add_argument(
         "--destination",
         default="teams-smoke-test",
-        help="Logical destination name included in the schema-v2 payload.",
+        help="Logical destination label for the smoke-test message.",
     )
     parser.add_argument(
         "--title",
@@ -99,26 +99,43 @@ def main() -> int:
         return 2
 
     correlation_id = str(uuid4())
-    idempotency_key = f"teams-smoke-test:{uuid4()}"
 
-    # Matches the schema-v2 payload used by notification-service-import-only.
+    # Matches the Adaptive Card envelope accepted by the Teams webhook trigger.
     payload = {
-        "schema_version": 2,
-        "correlation_id": correlation_id,
-        "idempotency_key": idempotency_key,
-        "source_application": "manual-teams-smoke-test",
-        "destination": args.destination,
-        "title": args.title,
-        "text": (
-            f"{args.text}\n\n"
-            f"UTC timestamp: {datetime.now(UTC).isoformat()}\n"
-            f"Correlation ID: {correlation_id}"
-        ),
-        "tables": [],
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "contentUrl": None,
+                "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.2",
+                    "body": [
+                        {
+                            "type": "TextBlock",
+                            "text": "Python Teams smoke test",
+                            "weight": "Bolder",
+                            "size": "Large",
+                            "wrap": True,
+                        },
+                        {
+                            "type": "TextBlock",
+                            "text": (
+                                f"{args.text}\n\n"
+                                f"UTC timestamp: {datetime.now(UTC).isoformat()}\n"
+                                f"Correlation ID: {correlation_id}"
+                            ),
+                            "wrap": True,
+                        },
+                    ],
+                },
+            }
+        ],
     }
 
     try:
-        print("Posting real notification to the Power Automate trigger...")
+        print("Posting real notification to the Teams workflow webhook...")
 
         with httpx.Client(
             timeout=httpx.Timeout(connect=5.0, read=30.0, write=30.0, pool=5.0),
@@ -130,7 +147,7 @@ def main() -> int:
         print(f"HTTP status: {response.status_code}")
 
         if 200 <= response.status_code < 300:
-            print("SUCCESS: Power Automate accepted the request.")
+            print("SUCCESS: Teams workflow accepted the webhook request.")
             print(
                 "Now verify that the message actually appeared in the configured "
                 "Microsoft Teams channel."

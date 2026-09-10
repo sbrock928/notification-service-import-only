@@ -11,7 +11,7 @@ flowchart LR
   Client --> Idem[Atomic idempotency]
   Client --> Port[Typed provider port]
   Port --> Outlook[Classic Outlook]
-  Port --> Flow[Power Automate Flow]
+  Port --> Flow[Power Automate Teams webhook workflow]
   Port -. experimental .-> Graph[Microsoft Graph]
 ```
 

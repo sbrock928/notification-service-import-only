@@ -25,12 +25,14 @@ teams_provider = PowerAutomateTeamsProvider(
 )
 ```
 
-Endpoints are one complete signed HTTPS URL, including the provider-generated query
-signature and its other opaque/jumbled parameters. Redirects, userinfo, fragments,
-bearer tokens, and arbitrary headers are rejected or unsupported. There is no
-separate host-suffix setting: keep the complete URL in the deployment secret store
-and never log it because its query string is a secret. Environment proxies remain
-enabled for the provider-owned HTTP client.
+The endpoint is the complete URL copied from the non-premium **Send webhook alerts
+to a channel** Teams workflow, including its provider-generated opaque/jumbled
+query parameters. The provider POSTs a standard Adaptive Card webhook envelope;
+the workflow posts that card to its configured channel. Redirects, userinfo,
+fragments, bearer tokens, and arbitrary headers are rejected or unsupported. There
+is no separate host-suffix setting: keep the complete URL in the deployment secret
+store and never log it because its query string is a secret. Environment proxies
+remain enabled for the provider-owned HTTP client.
 
 ## Client policy
 

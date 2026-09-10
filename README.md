@@ -5,7 +5,7 @@ Importing it starts no server, queue, scheduler, network call, worker thread, or
 environment lookup.
 
 - Classic Outlook/Win32 COM is the active email transport.
-- Power Automate HTTP-trigger Flows are the active Teams transport.
+- Power Automate Teams webhook workflows are the active Teams transport.
 - Microsoft Graph is experimental migration code.
 - Calling applications select records and provide display-ready strings.
 - This package validates, escapes, bounds, summarizes, and presents optional tables.
@@ -167,9 +167,10 @@ async with NotificationClient(
     )
 ```
 
-The package sends schema v2 only. Every configured Flow must support it before this
-version is deployed. A `2xx` response means that the Flow accepted the trigger,
-not that Teams delivered or a user read the message.
+The provider sends the standard Teams webhook envelope containing an Adaptive Card,
+which is consumed by the non-premium **Send webhook alerts to a channel** workflow.
+A `2xx` response means that the workflow accepted the webhook, not that Teams
+delivered or a user read the message. See the [Power Automate setup guide](docs/power_automate_setup.md).
 
 Use the same key for upstream redelivery. `UNKNOWN` means acceptance cannot be
 proved; never generate a new key and resend automatically. See the
@@ -209,7 +210,7 @@ application permission. If it still requires delegated `ChannelMessage.Send`,
 Power Automate remains the active transport. `Teamwork.Migrate.All` is reserved
 for migration scenarios and must not be used for routine notifications. If a new
 transport is approved, implement it behind the existing typed Teams provider
-port, preserve schema-v2 tables, and run the Teams contract suite before any
+ port, preserve structured tables, and run the Teams contract suite before any
 composition change.
 
 ### Stage D — hosted REST/microservice ingestion (future, separate runtime)

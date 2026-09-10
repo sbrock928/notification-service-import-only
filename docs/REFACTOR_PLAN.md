@@ -50,7 +50,8 @@ are stated; rendering may reduce rows further to meet channel limits.
 Email uses shared escaped, semantic, conservatively styled HTML and accessible
 plain text. Table cells are always text. Caller HTML is trusted transport input,
 but non-empty plain text is required and each final representation is limited to
-1 MiB. Power Automate emits schema v2 structured tables and omission counts; the
+1 MiB. Power Automate emits bounded Adaptive Card webhook payloads with structured
+tables and omission summaries; the
 Flow owns final Teams or Adaptive Card presentation. All Flows must accept v2
 before deployment. Simple v2 messages carry an empty `tables` array.
 
@@ -137,7 +138,8 @@ user session with one process per profile.
    loop ownership, and sanitized structured logging.
 6. Replace the Outlook adapter with a serial COM worker and explicit account and
    Send-As selection using the shared email renderer.
-7. Restrict Power Automate configuration and implement schema v2 payloads,
+7. Restrict Power Automate configuration and implement non-premium Teams webhook
+card payloads,
    classification, golden tests, and an opt-in integration test.
 8. Rebuild the sync facade around a synchronous factory created on its private
    event-loop thread with exception-safe lifecycle.
@@ -166,5 +168,5 @@ python -m pip check
 
 Windows additionally installs `.[dev,outlook-win32]` on Python 3.13 and runs
 offline fake-COM tests. Release verification includes controlled direct-account
-and shared-mailbox sends, Sent Items verification, and an opt-in Power Automate v2
+and shared-mailbox sends, Sent Items verification, and an opt-in Teams webhook
 integration test. Graph has no live release gate.

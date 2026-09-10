@@ -3,7 +3,7 @@
 ## Stage A — current 0.1.0
 
 Run as an imported library in the existing worker. Classic Outlook delivers email;
-Power Automate schema v2 delivers Teams notifications. Keep scheduling, queues,
+Power Automate Teams webhook workflows deliver Teams notifications. Keep scheduling, queues,
 business record selection, fan-out, and persistent audit history in host systems.
 
 ## Stage B — Graph email

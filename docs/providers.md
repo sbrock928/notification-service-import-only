@@ -14,33 +14,32 @@ can affect shared-mailbox sent-copy behavior and must be checked manually.
 
 ## Power Automate Teams
 
-The adapter maps a logical destination to one deployment-owned complete signed URL
-and emits schema v2. The URL's opaque query string is part of the secret; there is
-no separate host-suffix configuration:
+The adapter maps a logical destination to one deployment-owned complete workflow
+webhook URL and emits the standard Teams webhook envelope with one Adaptive Card.
+The URL's opaque query string is part of the secret; there is no separate
+host-suffix configuration. The non-premium **Send webhook alerts to a channel**
+workflow consumes this envelope and posts the card to its configured channel:
 
 ```json
 {
-  "schema_version": 2,
-  "correlation_id": "corr-123",
-  "idempotency_key": "teams:job:123",
-  "source_application": "task-runner",
-  "destination": "ops-alerts",
-  "title": "Import exceptions",
-  "text": "The import produced exception records.",
-  "tables": [
-    {
-      "caption": "Exceptions",
-      "columns": ["ID", "Reason"],
-      "rows": [["1234", "Invalid status"]],
-      "omitted_row_count": 0,
-      "omitted_column_count": 0
+  "type": "message",
+  "attachments": [{
+    "contentType": "application/vnd.microsoft.card.adaptive",
+    "content": {
+      "type": "AdaptiveCard",
+      "version": "1.2",
+      "body": [
+        {"type": "TextBlock", "text": "Import exceptions", "weight": "Bolder"},
+        {"type": "TextBlock", "text": "The import produced exception records.", "wrap": true}
+      ]
     }
-  ]
+  }]
 }
 ```
 
-Simple messages contain `"tables": []`. The Flow validates v2 and owns final Teams
-or Adaptive Card markup. Any `2xx` is trigger acceptance. Connect/pool failure is a
+Simple messages still contain one card; tables are rendered as safe Adaptive Card
+column sets and explicit omission summaries. The workflow owns the final channel
+post action. Any `2xx` is webhook acceptance. Connect/pool failure is a
 retryable non-acceptance; lost response, write/read error, 408, 5xx, and ordinary
 429 are unknown. A deployment may opt into retryable 429 only with a documented
 endpoint guarantee that throttling occurs before acceptance.

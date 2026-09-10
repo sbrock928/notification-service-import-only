@@ -56,7 +56,7 @@ def provider(client: httpx.AsyncClient, **changes: object) -> PowerAutomateTeams
     return PowerAutomateTeamsProvider(**values)  # type: ignore[arg-type]
 
 
-async def test_schema_v2_payload_accepts_any_2xx_and_bounds_tables() -> None:
+async def test_webhook_card_payload_accepts_any_2xx_and_bounds_tables() -> None:
     received: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -71,14 +71,22 @@ async def test_schema_v2_payload_accepts_any_2xx_and_bounds_tables() -> None:
 
     assert isinstance(result, ProviderAccepted)
     assert result.provider_message_id == "run-1"
-    assert received["schema_version"] == 2
-    assert received["correlation_id"] == "corr-1"
-    table = received["tables"][0]  # type: ignore[index]
-    assert table["omitted_row_count"] == 1
-    assert table["omitted_column_count"] == 1
+    assert received["type"] == "message"
+    attachment = received["attachments"][0]  # type: ignore[index]
+    card = attachment["content"]
+    assert card["type"] == "AdaptiveCard"
+    body = card["body"]
+    assert any("1 row(s) omitted" in str(item.get("text")) for item in body)
+    assert any("1 column(s) omitted" in str(item.get("text")) for item in body)
+    assert any(
+        fact["value"] == "corr-1"
+        for item in body
+        if item.get("type") == "FactSet"
+        for fact in item["facts"]
+    )
 
 
-async def test_simple_message_emits_empty_v2_tables() -> None:
+async def test_simple_message_emits_one_adaptive_card() -> None:
     received: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -89,7 +97,8 @@ async def test_simple_message_emits_empty_v2_tables() -> None:
     adapter = provider(client)
     await adapter.send(TeamsNotification(destination="ops-alerts", text="Simple"), metadata())
     await client.aclose()
-    assert received["tables"] == []
+    assert received["type"] == "message"
+    assert len(received["attachments"]) == 1  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
