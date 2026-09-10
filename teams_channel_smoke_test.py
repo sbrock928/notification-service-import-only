@@ -1,4 +1,4 @@
-"""Real Microsoft Teams channel smoke test through Power Automate.
+r"""Real Microsoft Teams channel smoke test through Power Automate.
 
 Purpose:
     Prove that Python can invoke the Teams webhook URL created by the
