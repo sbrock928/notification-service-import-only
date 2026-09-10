@@ -1,5 +1,6 @@
-"""Compatibility imports for the application service."""
+"""Notification orchestration and provider ports."""
 
+from notification_service.application.ports import NotificationProvider
 from notification_service.application.service import (
     DeliveryResult,
     DeliveryState,
@@ -14,4 +15,5 @@ __all__ = [
     "IdempotencyStore",
     "InMemoryIdempotencyStore",
     "NotificationClient",
+    "NotificationProvider",
 ]

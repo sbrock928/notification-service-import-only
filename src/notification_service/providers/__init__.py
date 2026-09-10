@@ -1,0 +1,1 @@
+"""Concrete notification infrastructure adapters."""

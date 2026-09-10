@@ -1,36 +1,50 @@
-# Power Automate and Outlook providers
+# Provider behavior
 
-`PowerAutomateEmailProvider` is the initial live provider. It posts a bounded
-JSON payload to one configured HTTPS flow trigger. The flow owns the Outlook
-connector, shared-mailbox connection, and actual send action. The provider
-accepts `200`, `201`, `202`, or `204` as flow-trigger acceptance; this does not
-claim Exchange delivery.
+## Power Automate Teams
 
-The temporary flow connection can use the operator's user authentication. Keep
-the endpoint and token in the host application's secret store and never log
-either value. When an Entra service identity is available, change the flow
-connection or bearer-token acquisition in the host application; callers and
-notification models stay unchanged.
+`PowerAutomateTeamsProvider` maps a validated logical name such as `ops-alerts` to a deployment-owned
+`PowerAutomateWebhook`. Unsupported destinations are rejected without an HTTP request. The payload
+contains schema version, correlation and idempotency keys, source application, destination, title,
+and text.
 
-Power Automate retry settings must be reviewed and disabled or made
-idempotent. A connector retry after an ambiguous response can otherwise produce
-duplicate email. The upstream task queue must reuse the same notification
-idempotency key for its retry.
+The flow should validate the payload, construct the supported Teams message or Adaptive Card, post
+to its fixed channel, and return an optional `run_id` or `message_id`. A `2xx` response means flow
+acceptance, not Teams delivery or user read confirmation.
 
-`GraphEmailProvider` remains available as an optional provider for a future
-deployment. It is not required by the initial Power Automate installation.
+Review or disable Power Automate retries unless the flow deduplicates on `idempotency_key`. A lost
+response can otherwise produce duplicate messages.
 
-## Teams channel webhooks
+## Win32 Outlook email
 
-Teams messages use a separate provider in a later PR. Every destination is an
-explicit configuration entry such as `ops-alerts -> https://...flow...`; a
-caller cannot choose an arbitrary channel or webhook URL. This keeps channel
-scope, flow ownership, and rotation operationally visible. Unsupported
-destinations fail before the webhook is called.
+`Win32OutlookEmailProvider` creates an Outlook mail item using the current Windows user's Outlook
+profile. It supports To/CC/BCC, text or HTML, an optional send-on-behalf-of mailbox, and bounded
+attachments. Attachment bytes are copied to a private temporary directory because the Outlook COM
+API accepts file paths; the directory is removed after Outlook has attached them.
 
-`GraphEmailProvider` remains an optional alternative. It translates the same
-provider-independent model into Microsoft Graph JSON, uses a draft for
-attachments, and normalizes responses into `ProviderAccepted` or
-`ProviderRejected`.
+COM is initialized inside the same worker thread that uses it. Sends are serialized. An error before
+`MailItem.Send()` is known not to have sent; an error during `Send()` is ambiguous and is returned as
+`unknown` by the application service.
 
-The service never claims delivery or read confirmation. A timeout after the send request may have reached Microsoft and is therefore returned as `unknown`; the upstream task must not automatically create a new notification key.
+## Microsoft Graph migration
+
+`GraphEmailProvider` and `GraphTeamsProvider` consume the same `EmailNotification` and
+`TeamsNotification` models. Teams destinations remain logical names, mapped to configured team and
+channel IDs. Graph credentials are behind the `AccessToken` protocol; `ClientSecretToken` is the
+included unattended credential implementation for email.
+
+The two Graph providers do not currently use the same OAuth grant. Graph email can use application
+permissions (`Mail.ReadWrite` for draft/attachment operations plus `Mail.Send`). Ordinary Teams
+channel posting requires a delegated work-account token with `ChannelMessage.Send`; Graph application
+permission is reserved for data migration and must not be used for routine notifications. The host
+application must therefore supply a delegated `AccessToken` implementation to `GraphTeamsProvider`.
+
+Graph adapters are migration targets, not required for the initial deployment. Confirm permissions,
+mailbox/channel scoping, tenant policy, and production consent before selecting them.
+
+## Shared delivery semantics
+
+Providers return `ProviderAccepted` or `ProviderRejected`. `NotificationClient` maps these to:
+
+- `accepted`: the provider accepted the operation;
+- `failed`: the provider is known not to have accepted it;
+- `unknown`: acceptance may have happened, so automatic retry could duplicate it.

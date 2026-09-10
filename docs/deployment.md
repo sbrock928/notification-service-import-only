@@ -1,11 +1,21 @@
 # Deployment
 
-Install the package into the existing upstream worker environment:
+Install the package in the existing worker. The initial email worker must run on Windows with Outlook
+desktop installed, a configured profile, and the `outlook-win32` package extra. Teams delivery only
+requires outbound HTTPS access to the configured Power Automate trigger endpoints.
 
-```bash
-uv add notification-service-import-only
-```
+Before production, verify:
 
-The worker process calls `await client.send(...)`; no second service process is required. If the upstream worker is synchronous, use `SyncNotificationClient` at the integration boundary.
+- the worker's Outlook profile can send from the configured mailbox;
+- Outlook security policy permits unattended object-model sends;
+- HTML/text and supported attachment types work under the service account;
+- every Teams destination resolves to the intended Power Automate flow and channel;
+- trigger authentication, flow ownership, secret rotation, and connector retry policy;
+- timeouts and lost final responses produce an operational review instead of blind resend;
+- the upstream queue reuses idempotency keys on business-task retries;
+- graceful shutdown calls `await client.aclose()`.
 
-Before production, run a controlled live test with an approved internal mailbox. Verify Power Automate HTTP-trigger authentication, flow ownership/co-ownership, shared-mailbox permissions, the Zscaler path, basic HTML/text mail, CSV/XLSX attachments, duplicate behavior when the flow response is lost, webhook rotation, and the behavior when the final provider response is lost.
+For Graph migration, separately verify tenant consent, email application-permission scope, the Teams
+delegated-authentication flow, mailbox and channel scope, Conditional Access, token rotation, and
+outbound Graph connectivity. Microsoft currently limits application-only channel posting to migration
+scenarios, so an unattended client secret cannot replace the Power Automate Teams flow directly.

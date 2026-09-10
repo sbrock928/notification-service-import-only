@@ -1,13 +1,7 @@
-"""Provider port used by the application service and fakes in tests."""
+"""Compatibility imports for application provider ports."""
 
-from __future__ import annotations
+from notification_service.application.ports import NotificationProvider
 
-from typing import Protocol
+EmailProvider = NotificationProvider
 
-from notification_service.models import EmailNotification, ProviderOutcome
-
-
-class EmailProvider(Protocol):
-    async def send(self, notification: EmailNotification) -> ProviderOutcome: ...
-
-    async def aclose(self) -> None: ...
+__all__ = ["EmailProvider", "NotificationProvider"]

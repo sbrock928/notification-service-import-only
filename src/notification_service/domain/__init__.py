@@ -1,5 +1,11 @@
-"""Compatibility imports for provider-independent domain models."""
+"""Provider-independent notification domain objects."""
 
+from notification_service.domain.errors import (
+    IdempotencyConflict,
+    NotificationError,
+    ProviderError,
+    ValidationError,
+)
 from notification_service.domain.models import (
     Attachment,
     EmailNotification,
@@ -14,10 +20,14 @@ from notification_service.domain.models import (
 __all__ = [
     "Attachment",
     "EmailNotification",
+    "IdempotencyConflict",
     "Notification",
+    "NotificationError",
     "ProviderAccepted",
+    "ProviderError",
     "ProviderOutcome",
     "ProviderRejected",
     "Recipient",
     "TeamsNotification",
+    "ValidationError",
 ]

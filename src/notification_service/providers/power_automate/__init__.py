@@ -1,6 +1,6 @@
-"""Compatibility imports for Power Automate Teams delivery."""
+"""Power Automate adapters."""
 
-from notification_service.providers.power_automate import (
+from notification_service.providers.power_automate.teams import (
     PowerAutomateTeamsProvider,
     PowerAutomateWebhook,
 )

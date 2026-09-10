@@ -5,12 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "notification-service-import-only"
 version = "0.1.0"
-description = "Small import-only Outlook notification client"
+description = "Import-only email and Teams notification client with replaceable providers"
 requires-python = ">=3.12"
-dependencies = ["httpx>=0.28,<1", "pydantic>=2.11,<3", "pydantic-settings>=2.8,<3"]
+dependencies = ["httpx>=0.28,<1"]
 
 [project.optional-dependencies]
 graph = ["azure-identity>=1.21,<2"]
+outlook-win32 = ["pywin32>=308; sys_platform == 'win32'"]
 dev = ["pytest>=8.3,<10", "pytest-asyncio>=0.25,<2", "ruff>=0.11,<1", "mypy>=1.15,<2", "build>=1.2,<2"]
 
 [tool.hatch.build.targets.wheel]
@@ -29,7 +30,7 @@ strict = true
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["azure.*"]
+module = ["azure.*", "pythoncom", "win32com.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

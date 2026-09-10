@@ -1,29 +1,42 @@
-# Import-only architecture
+# Architecture
 
-The package is a library, not a service. An existing task queue invokes it directly in the worker that already owns scheduling and retries.
+The package follows a small ports-and-adapters layout. Domain and application code contain no
+Power Automate, COM, Outlook, or Graph types.
 
 ```mermaid
 flowchart LR
-  Queue[Existing upstream task queue] --> Worker[Upstream task worker]
-  Worker --> Client[NotificationClient]
-  Client --> Port[EmailProvider protocol]
-  Port --> PA[PowerAutomateEmailProvider]
-  PA --> Flow[Power Automate HTTP trigger]
-  Flow --> Outlook[Office 365 Outlook connector]
+  Worker[Existing task worker] --> EmailClient[NotificationClient EmailNotification]
+  Worker --> TeamsClient[NotificationClient TeamsNotification]
+  EmailClient --> EmailPort[NotificationProvider EmailNotification]
+  TeamsClient --> TeamsPort[NotificationProvider TeamsNotification]
+  EmailPort --> COM[Win32OutlookEmailProvider]
+  TeamsPort --> PA[PowerAutomateTeamsProvider]
+  COM --> Outlook[Outlook desktop]
+  PA --> Flow[Power Automate flow]
+  Flow --> Teams[Teams channel]
+  EmailPort -. future .-> GraphEmail[GraphEmailProvider]
+  TeamsPort -. future .-> GraphTeams[GraphTeamsProvider]
 ```
 
-The package has no FastAPI, queue, polling loop, database, or background thread. It owns validation, a provider-independent request model, conservative provider retry classification, and optional process-local idempotency. Shared idempotency belongs in the calling application if it must survive restarts.
+`NotificationClient` owns validation policy, timeouts, conservative retries, normalized delivery
+states, and optional idempotency. Providers only translate a domain notification into one external
+transport.
 
-Power Automate is the initial transport. The flow receives the request, uses the
-Office 365 Outlook connector to send from the configured shared mailbox, and
-returns a small response containing an optional flow/run/message reference. The
-temporary connection may be the developer's user account. Replace that
-connection with an Entra service identity later without changing the package
-contract.
+The primary API is asynchronous. Power Automate and Graph are network I/O; Outlook COM is moved to
+a worker thread and serialized because the Outlook object model is synchronous. The optional
+`SyncNotificationClient` owns a private event-loop thread for strictly synchronous callers.
 
-Teams is intentionally narrower: a named destination maps to one preconfigured
-Power Automate webhook for one channel. The caller supplies the destination
-name, never a webhook URL. Destination registration and ownership remain
-deployment configuration.
+Provider construction is the migration boundary:
 
-The async API is primary because the webhook/provider call is network I/O. `SyncNotificationClient` provides a single private loop thread for scripts that cannot use `asyncio`; it is not used from notebooks or other active event loops.
+```python
+# Initial
+email_client = NotificationClient(Win32OutlookEmailProvider())
+teams_client = NotificationClient(PowerAutomateTeamsProvider(webhooks))
+
+# Later; notification construction and send calls are unchanged
+email_client = NotificationClient(GraphEmailProvider(mailbox, token))
+teams_client = NotificationClient(GraphTeamsProvider(channels, token))
+```
+
+The included idempotency store is process-local. The calling application should implement the
+`IdempotencyStore` protocol with shared storage when duplicate protection must survive restarts.

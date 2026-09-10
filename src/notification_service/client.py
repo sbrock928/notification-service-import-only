@@ -8,16 +8,16 @@ from collections.abc import Awaitable, Callable, Coroutine
 from types import TracebackType
 from typing import Any, Self, TypeVar
 
-from notification_service.models import EmailNotification
-from notification_service.service import DeliveryResult, NotificationClient
+from notification_service.application.service import DeliveryResult, NotificationClient
+from notification_service.domain.models import Notification
 
 T = TypeVar("T")
 
 
-class SyncNotificationClient:
+class SyncNotificationClient[NotificationT: Notification]:
     """Run one async client on a private loop thread for synchronous callers."""
 
-    def __init__(self, factory: Callable[[], Awaitable[NotificationClient]]) -> None:
+    def __init__(self, factory: Callable[[], Awaitable[NotificationClient[NotificationT]]]) -> None:
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -29,10 +29,10 @@ class SyncNotificationClient:
         self._thread.start()
         self._closed = False
 
-        async def create() -> NotificationClient:
+        async def create() -> NotificationClient[NotificationT]:
             return await factory()
 
-        self._client: NotificationClient = self._call(create())
+        self._client = self._call(create())
 
     def _call(self, coroutine: Coroutine[Any, Any, T]) -> T:
         if self._closed:
@@ -40,7 +40,7 @@ class SyncNotificationClient:
             raise RuntimeError("Client is closed")
         return asyncio.run_coroutine_threadsafe(coroutine, self._loop).result()
 
-    def send(self, notification: EmailNotification) -> DeliveryResult:
+    def send(self, notification: NotificationT) -> DeliveryResult:
         return self._call(self._client.send(notification))
 
     def close(self) -> None:

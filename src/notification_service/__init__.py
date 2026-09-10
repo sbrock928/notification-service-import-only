@@ -1,21 +1,47 @@
-"""Import-only notification client. Importing this package starts no network or background work."""
+"""Import-only notification client with replaceable Microsoft transports."""
 
+from notification_service.application.service import (
+    DeliveryResult,
+    DeliveryState,
+    InMemoryIdempotencyStore,
+    NotificationClient,
+)
 from notification_service.client import SyncNotificationClient
-from notification_service.models import Attachment, EmailNotification, Recipient
-from notification_service.outlook import GraphEmailProvider
-from notification_service.power_automate import PowerAutomateEmailProvider
-from notification_service.service import DeliveryResult, DeliveryState, NotificationClient
+from notification_service.domain.models import (
+    Attachment,
+    EmailNotification,
+    Recipient,
+    TeamsNotification,
+)
+from notification_service.providers.microsoft_graph import (
+    ClientSecretToken,
+    GraphEmailProvider,
+    GraphTeamsProvider,
+    TeamsChannel,
+)
+from notification_service.providers.power_automate import (
+    PowerAutomateTeamsProvider,
+    PowerAutomateWebhook,
+)
+from notification_service.providers.win32com import Win32OutlookEmailProvider
 
 __all__ = [
     "Attachment",
+    "ClientSecretToken",
     "DeliveryResult",
     "DeliveryState",
     "EmailNotification",
     "GraphEmailProvider",
+    "GraphTeamsProvider",
+    "InMemoryIdempotencyStore",
     "NotificationClient",
-    "PowerAutomateEmailProvider",
+    "PowerAutomateTeamsProvider",
+    "PowerAutomateWebhook",
     "Recipient",
     "SyncNotificationClient",
+    "TeamsChannel",
+    "TeamsNotification",
+    "Win32OutlookEmailProvider",
 ]
 
 __version__ = "0.1.0"
