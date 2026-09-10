@@ -1,24 +1,29 @@
-"""Import-only notification client with replaceable Microsoft transports."""
+"""Stable import-only notification client API."""
 
-from notification_service.application.service import (
+from notification_service.application.contracts import (
+    DeliveryErrorCode,
     DeliveryResult,
     DeliveryState,
-    InMemoryIdempotencyStore,
-    NotificationClient,
 )
+from notification_service.application.idempotency import InMemoryIdempotencyStore
+from notification_service.application.policies import AllowedEmailDomainsPolicy
+from notification_service.application.retry import RetryPolicy
+from notification_service.application.service import NotificationClient
 from notification_service.client import SyncNotificationClient
+from notification_service.domain.errors import (
+    ClientClosedError,
+    IdempotencyConflict,
+    NotificationError,
+    ValidationError,
+)
 from notification_service.domain.models import (
     Attachment,
     EmailNotification,
+    NotificationTable,
     Recipient,
     TeamsNotification,
 )
-from notification_service.providers.microsoft_graph import (
-    ClientSecretToken,
-    GraphEmailProvider,
-    GraphTeamsProvider,
-    TeamsChannel,
-)
+from notification_service.presentation.tables import TableRenderPolicy
 from notification_service.providers.power_automate import (
     PowerAutomateTeamsProvider,
     PowerAutomateWebhook,
@@ -26,21 +31,26 @@ from notification_service.providers.power_automate import (
 from notification_service.providers.win32com import Win32OutlookEmailProvider
 
 __all__ = [
+    "AllowedEmailDomainsPolicy",
     "Attachment",
-    "ClientSecretToken",
+    "ClientClosedError",
+    "DeliveryErrorCode",
     "DeliveryResult",
     "DeliveryState",
     "EmailNotification",
-    "GraphEmailProvider",
-    "GraphTeamsProvider",
+    "IdempotencyConflict",
     "InMemoryIdempotencyStore",
     "NotificationClient",
+    "NotificationError",
+    "NotificationTable",
     "PowerAutomateTeamsProvider",
     "PowerAutomateWebhook",
     "Recipient",
+    "RetryPolicy",
     "SyncNotificationClient",
-    "TeamsChannel",
+    "TableRenderPolicy",
     "TeamsNotification",
+    "ValidationError",
     "Win32OutlookEmailProvider",
 ]
 

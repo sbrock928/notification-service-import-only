@@ -1,6 +1,7 @@
-"""Provider-independent notification domain objects."""
+"""Provider-neutral notification domain."""
 
 from notification_service.domain.errors import (
+    ClientClosedError,
     IdempotencyConflict,
     NotificationError,
     ProviderError,
@@ -10,23 +11,20 @@ from notification_service.domain.models import (
     Attachment,
     EmailNotification,
     Notification,
-    ProviderAccepted,
-    ProviderOutcome,
-    ProviderRejected,
+    NotificationTable,
     Recipient,
     TeamsNotification,
 )
 
 __all__ = [
     "Attachment",
+    "ClientClosedError",
     "EmailNotification",
     "IdempotencyConflict",
     "Notification",
     "NotificationError",
-    "ProviderAccepted",
+    "NotificationTable",
     "ProviderError",
-    "ProviderOutcome",
-    "ProviderRejected",
     "Recipient",
     "TeamsNotification",
     "ValidationError",

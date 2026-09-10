@@ -1,8 +1,0 @@
-"""Compatibility imports for Power Automate Teams delivery."""
-
-from notification_service.providers.power_automate import (
-    PowerAutomateTeamsProvider,
-    PowerAutomateWebhook,
-)
-
-__all__ = ["PowerAutomateTeamsProvider", "PowerAutomateWebhook"]

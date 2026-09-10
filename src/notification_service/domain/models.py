@@ -1,73 +1,198 @@
-"""Immutable values shared by every notification transport."""
+"""Immutable provider-neutral notification content."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
-from uuid import uuid4
+from typing import ClassVar, Protocol
 
 from notification_service.domain.errors import ValidationError
 
-_IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9_.:/-]{1,128}")
+MIB = 1024 * 1024
+MAX_BODY_BYTES = MIB
+MAX_ATTACHMENTS = 10
+MAX_ATTACHMENT_BYTES = 10 * MIB
+MAX_TOTAL_ATTACHMENT_BYTES = 20 * MIB
+MAX_TABLES = 3
+MAX_TABLE_ROWS = 1_000
+MAX_TABLE_COLUMNS = 50
+MAX_CELL_CHARACTERS = 4_096
+MAX_HEADING_CHARACTERS = 128
+MAX_CAPTION_CHARACTERS = 255
+MAX_TABLE_DATA_BYTES = 5 * MIB
+
 _DESTINATION = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
+_LOCAL_PART = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}")
+_DOMAIN = re.compile(
+    r"(?=.{1,253}\Z)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+)
+_MEDIA_TYPE = re.compile(r"[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+")
+_WINDOWS_RESERVED = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{number}" for number in range(1, 10)),
+    *(f"LPT{number}" for number in range(1, 10)),
+}
+_INVALID_FILENAME = set('<>:"/\\|?*')
 
 
 class Notification(Protocol):
-    """The application-layer contract implemented by notification models."""
+    """Content accepted by the transport-neutral application service."""
 
-    idempotency_key: str | None
-    correlation_id: str
-    source_application: str
+    channel: ClassVar[str]
 
     @property
     def fingerprint(self) -> str: ...
 
 
+def _utf8_size(value: str) -> int:
+    return len(value.encode("utf-8"))
+
+
 def _fingerprint(value: object) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
+    canonical = json.dumps(
+        {"fingerprint_version": 2, "notification": value},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
-def _validate_common(idempotency_key: str | None, source_application: str) -> None:
-    if idempotency_key is not None and not _IDEMPOTENCY_KEY.fullmatch(idempotency_key):
-        raise ValidationError("Idempotency key has invalid characters")
-    if not source_application or len(source_application) > 128:
-        raise ValidationError("Source application must be 1-128 characters")
-
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Recipient:
+    """An address-only ASCII mailbox."""
+
     address: str
 
     def __post_init__(self) -> None:
-        if not re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+", self.address):
+        try:
+            self.address.encode("ascii")
+        except UnicodeEncodeError as error:
+            raise ValidationError("Email addresses must contain ASCII characters only") from error
+        if self.address.count("@") != 1:
             raise ValidationError("Invalid email address")
+        local, domain = self.address.rsplit("@", 1)
+        if not _LOCAL_PART.fullmatch(local) or not _DOMAIN.fullmatch(domain):
+            raise ValidationError("Invalid email address")
+        object.__setattr__(self, "address", f"{local}@{domain.lower()}")
 
 
-@dataclass(frozen=True)
+def _safe_filename(value: str) -> str:
+    filename = unicodedata.normalize("NFC", value)
+    if (
+        not filename
+        or filename in {".", ".."}
+        or len(filename) > 255
+        or filename[-1] in {" ", "."}
+        or any(character in _INVALID_FILENAME or ord(character) < 32 for character in filename)
+        or filename.split(".", 1)[0].upper() in _WINDOWS_RESERVED
+    ):
+        raise ValidationError("Attachment filename is not safe")
+    return filename
+
+
+@dataclass(frozen=True, slots=True)
 class Attachment:
     filename: str
     media_type: str
     content: bytes = field(repr=False)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "filename", _safe_filename(self.filename))
+        if not _MEDIA_TYPE.fullmatch(self.media_type):
+            raise ValidationError("Attachment media type is invalid")
+        try:
+            immutable_content = bytes(self.content)
+        except (TypeError, ValueError) as error:
+            raise ValidationError("Attachment content must be bytes-like") from error
+        if len(immutable_content) > MAX_ATTACHMENT_BYTES:
+            raise ValidationError("Attachment exceeds the 10 MiB limit")
+        object.__setattr__(self, "content", immutable_content)
+
     @classmethod
     def from_path(cls, path: str | Path, media_type: str) -> Attachment:
-        """Read a local attachment explicitly before invoking a provider."""
+        """Read at most one byte beyond the supported attachment size."""
         source = Path(path)
-        return cls(source.name, media_type, source.read_bytes())
+        with source.open("rb") as stream:
+            content = stream.read(MAX_ATTACHMENT_BYTES + 1)
+        return cls(source.name, media_type, content)
 
     @property
     def sha256(self) -> str:
         return hashlib.sha256(self.content).hexdigest()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NotificationTable:
+    """A narrow table of caller-owned, display-ready strings."""
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[str, ...], ...] = ()
+    caption: str | None = None
+
+    def __post_init__(self) -> None:
+        columns = tuple(self.columns)
+        rows = tuple(tuple(row) for row in self.rows)
+        if not columns or len(columns) > MAX_TABLE_COLUMNS:
+            raise ValidationError("A table must contain 1-50 columns")
+        if len(rows) > MAX_TABLE_ROWS:
+            raise ValidationError("A table cannot contain more than 1000 rows")
+        for heading in columns:
+            if not isinstance(heading, str) or not heading or len(heading) > MAX_HEADING_CHARACTERS:
+                raise ValidationError(
+                    "Table headings must be non-empty strings up to 128 characters"
+                )
+        for row in rows:
+            if len(row) != len(columns):
+                raise ValidationError("Every table row must match the column count")
+            if any(not isinstance(cell, str) or len(cell) > MAX_CELL_CHARACTERS for cell in row):
+                raise ValidationError("Table cells must be strings up to 4096 characters")
+        if self.caption is not None and (
+            not isinstance(self.caption, str)
+            or not self.caption
+            or len(self.caption) > MAX_CAPTION_CHARACTERS
+        ):
+            raise ValidationError("Table captions must be non-empty strings up to 255 characters")
+        object.__setattr__(self, "columns", columns)
+        object.__setattr__(self, "rows", rows)
+
+    @property
+    def utf8_size(self) -> int:
+        labels = (*(() if self.caption is None else (self.caption,)), *self.columns)
+        return sum(_utf8_size(value) for value in labels) + sum(
+            _utf8_size(cell) for row in self.rows for cell in row
+        )
+
+    def canonical_value(self) -> dict[str, object]:
+        return {
+            "caption": self.caption,
+            "columns": list(self.columns),
+            "rows": [list(row) for row in self.rows],
+        }
+
+
+def _normalize_tables(tables: tuple[NotificationTable, ...]) -> tuple[NotificationTable, ...]:
+    normalized = tuple(tables)
+    if len(normalized) > MAX_TABLES:
+        raise ValidationError("A notification can contain at most three tables")
+    if any(not isinstance(table, NotificationTable) for table in normalized):
+        raise ValidationError("Notification tables must be NotificationTable values")
+    if sum(table.utf8_size for table in normalized) > MAX_TABLE_DATA_BYTES:
+        raise ValidationError("Notification table data exceeds the 5 MiB limit")
+    return normalized
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class EmailNotification:
+    channel: ClassVar[str] = "email"
     to: tuple[Recipient, ...]
     subject: str
     text: str
@@ -75,36 +200,40 @@ class EmailNotification:
     bcc: tuple[Recipient, ...] = ()
     html: str | None = None
     attachments: tuple[Attachment, ...] = ()
-    idempotency_key: str | None = None
-    correlation_id: str = field(default_factory=lambda: str(uuid4()))
-    source_application: str = "unknown"
+    tables: tuple[NotificationTable, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.to:
+        to, cc, bcc = tuple(self.to), tuple(self.cc), tuple(self.bcc)
+        attachments = tuple(self.attachments)
+        if not to:
             raise ValidationError("At least one recipient is required")
+        if any(not isinstance(item, Recipient) for item in (*to, *cc, *bcc)):
+            raise ValidationError("Email recipients must be Recipient values")
+        addresses = [recipient.address.casefold() for recipient in (*to, *cc, *bcc)]
+        if len(addresses) != len(set(addresses)):
+            raise ValidationError("Duplicate recipients across To, CC, and BCC are not allowed")
         if (
             not self.subject
             or len(self.subject) > 255
-            or "\n" in self.subject
             or "\r" in self.subject
+            or "\n" in self.subject
         ):
             raise ValidationError("Subject must be 1-255 characters without newlines")
-        if not self.text and not self.html:
-            raise ValidationError("An email body is required")
-        if len(self.attachments) > 10:
+        if not self.text or _utf8_size(self.text) > MAX_BODY_BYTES:
+            raise ValidationError("Email text must be non-empty and no larger than 1 MiB")
+        if self.html is not None and _utf8_size(self.html) > MAX_BODY_BYTES:
+            raise ValidationError("Email HTML cannot exceed 1 MiB")
+        if len(attachments) > MAX_ATTACHMENTS:
             raise ValidationError("At most 10 attachments are supported")
-        if sum(len(item.content) for item in self.attachments) > 20 * 1024**2:
+        if any(not isinstance(item, Attachment) for item in attachments):
+            raise ValidationError("Email attachments must be Attachment values")
+        if sum(len(item.content) for item in attachments) > MAX_TOTAL_ATTACHMENT_BYTES:
             raise ValidationError("Attachments exceed the 20 MiB total limit")
-        for item in self.attachments:
-            if (
-                not item.filename
-                or not item.media_type
-                or len(item.content) > 10 * 1024**2
-                or "/" in item.filename
-                or "\\" in item.filename
-            ):
-                raise ValidationError("Attachment is invalid or too large")
-        _validate_common(self.idempotency_key, self.source_application)
+        object.__setattr__(self, "to", to)
+        object.__setattr__(self, "cc", cc)
+        object.__setattr__(self, "bcc", bcc)
+        object.__setattr__(self, "attachments", attachments)
+        object.__setattr__(self, "tables", _normalize_tables(self.tables))
 
     @property
     def all_recipients(self) -> tuple[Recipient, ...]:
@@ -114,7 +243,7 @@ class EmailNotification:
     def fingerprint(self) -> str:
         return _fingerprint(
             {
-                "type": "email",
+                "type": self.channel,
                 "to": [item.address for item in self.to],
                 "cc": [item.address for item in self.cc],
                 "bcc": [item.address for item in self.bcc],
@@ -129,20 +258,20 @@ class EmailNotification:
                     }
                     for item in self.attachments
                 ],
+                "tables": [table.canonical_value() for table in self.tables],
             }
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TeamsNotification:
     """A message addressed to a logical, preconfigured Teams destination."""
 
+    channel: ClassVar[str] = "teams"
     destination: str
     text: str
     title: str | None = None
-    idempotency_key: str | None = None
-    correlation_id: str = field(default_factory=lambda: str(uuid4()))
-    source_application: str = "unknown"
+    tables: tuple[NotificationTable, ...] = ()
 
     def __post_init__(self) -> None:
         if not _DESTINATION.fullmatch(self.destination):
@@ -151,33 +280,16 @@ class TeamsNotification:
             raise ValidationError("Teams text must be 1-28000 characters")
         if self.title is not None and (not self.title or len(self.title) > 255):
             raise ValidationError("Teams title must be 1-255 characters")
-        _validate_common(self.idempotency_key, self.source_application)
+        object.__setattr__(self, "tables", _normalize_tables(self.tables))
 
     @property
     def fingerprint(self) -> str:
         return _fingerprint(
             {
-                "type": "teams",
+                "type": self.channel,
                 "destination": self.destination,
                 "title": self.title,
                 "text": self.text,
+                "tables": [table.canonical_value() for table in self.tables],
             }
         )
-
-
-@dataclass(frozen=True)
-class ProviderAccepted:
-    provider_message_id: str | None
-    accepted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-
-@dataclass(frozen=True)
-class ProviderRejected:
-    code: str
-    message: str
-    retryable: bool
-    known_not_accepted: bool = True
-    retry_after_seconds: float | None = None
-
-
-ProviderOutcome = ProviderAccepted | ProviderRejected
