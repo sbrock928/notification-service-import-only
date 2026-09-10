@@ -240,10 +240,12 @@ class PowerAutomateTeamsProvider:
             return max(0.0, float(value))
         except ValueError:
             try:
-                date = parsedate_to_datetime(value)
+                parsed_date: object = parsedate_to_datetime(value)
             except (TypeError, ValueError):
                 return None
-            return max(0.0, (date - datetime.now(UTC)).total_seconds())
+            if not isinstance(parsed_date, datetime) or parsed_date.tzinfo is None:
+                return None
+            return max(0.0, (parsed_date - datetime.now(UTC)).total_seconds())
 
     async def aclose(self) -> None:
         if self._owns_client:
